@@ -1,0 +1,357 @@
+#!/bin/bash
+#
+# Register sysinfo on dns-sd
+#
+
+declare -a config
+
+function addParam {
+	config=("${config[@]}" "$1=$2")
+}
+
+os=`uname -s`
+arch=`uname -m`
+archBits=`getconf LONG_BIT`
+longHostname=`uname -n`
+hostname=${longHostname%%.*}
+
+addParam "os" "$os"
+addParam "arch" "$arch"
+addParam "osArchBits" "$archBits"
+addParam "hostname" "$hostname"
+
+if [ "x$os" == "xLinux" ] ; then
+	addParam "osName" $(lsb_release -si)
+	addParam "osVersion" $(lsb_release -sr)
+	# lsb_release -sc # codename like stretch for debian
+	# https://unix.stackexchange.com/questions/88644/how-to-check-os-and-version-using-a-linux-command
+	# If it is a debian based system, you could do
+	# cat /etc/*_version
+	# or for a Red Hat based system, you could try (this is working on Red Hat Enterprise Linux-7):
+	# cat /etc/*-release
+fi
+
+if [ "x$os" == "xDarwin" ] ; then
+	addParam "osName" $(sw_vers -productName)
+	addParam "osVersion" $(sw_vers -productVersion)
+	addParam "osBuild" $(sw_vers -buildVersion)
+fi
+
+
+oldIFS=$IFS
+IFS=$'\n'
+
+if [ "x$os" == "xLinux" ] ; then
+
+	for cpuinfoLine in `cat /proc/cpuinfo | egrep -i 'core id|physical id|processor|model name|Hardware|Revision|CPU implementer|CPU part'` ; do
+		k=${cpuinfoLine%%:*}
+		k="${k%"${k##*[![:space:]]}"}"  # trailing spaces
+		v=${cpuinfoLine##*: }
+
+		# $(( a > b ? a : b ))
+		# processors displayed in incrementiong fashion
+		if [ "x$k" == "xcore id" ] ; then
+			#cpuCores=$(( v > cpuCores ? v : cpuCores ))
+			cpuCores=$v
+			continue
+		fi
+		if [ "x$k" == "xphysical id" ] ; then
+			cpuSockets=$v
+			continue
+		fi
+		if [ "x$k" == "xprocessor" ] ; then
+			cpuThreads=$v
+			continue
+		fi
+
+		# https://lists.linaro.org/pipermail/linaro-dev/2011-September/007156.html
+		# https://lists.linaro.org/pipermail/linaro-dev/2011-September/007164.html - actual list
+		# /proc/cpuinfo code: https://lists.linaro.org/pipermail/linaro-dev/2011-September/007166.html
+
+		# if implementer is ARM=0x41
+		# Main ID register
+		# ID Code Register
+		# Cortex A5 - 0xc05
+		# Cortex A8 - 0xc08
+		# Cortex A9 - 0xc09
+		# Cortex A15 - 0xc0f
+		#
+		# Cortex R4 - 0xc14
+		# Cortex R5 - 0xc15
+		#
+		# ARM1136 - 0xb36
+		# ARM1156 - 0xb56
+		# ARM1176 - 0xb76
+		# ARM11 MPCore - 0xb02
+		# ARM926 - 0x926
+		# ARM946 - 0x946
+		# ARM966 - 0x966
+
+		# Intel CPU details
+		# https://unix.stackexchange.com/questions/230634/how-to-find-out-intel-architecture-family-from-command-line
+
+		#dpkg --print-architecture
+		# https://unix.stackexchange.com/questions/6345/how-can-i-get-distribution-name-and-version-number-in-a-simple-shell-script/6348#6348
+
+		# https://stackoverflow.com/questions/246007/how-to-determine-whether-a-given-linux-is-32-bit-or-64-bit/246014#246014
+		# cc -dumpmachine
+
+	done
+
+	# TODO: bad name, should be maxCoreNum etc...
+	if [ "x$cpuCores" == "x" ]   ; then cpuCores=$cpuThreads ; fi
+	if [ "x$cpuSockets" == "x" ] ; then cpuSockets=0 ; fi
+
+	addParam "cpuThreads" $((cpuThreads+1))
+	addParam "cpuCores"   $((cpuCores+1))
+	addParam "cpuSockets" $((cpuSockets+1))
+
+	# TODO: propose to add nobody to sudoers:
+	# sudo visudo -f  /etc/sudoers.d/sysinfo
+	# nobody host = (root) NOPASSWD: /usr/sbin/dmidecode
+
+	for dmiMemLine in $(/usr/sbin/dmidecode -t 16 2>/dev/null) ; do
+		if [ "x$dmiMemLine" == "x" ] ; then
+			memUse=""
+			continue
+		fi
+
+		k=${dmiMemLine%%:*}
+		k="${k#"${k%%[![:space:]]*}"}" # leading spaces
+		v=${dmiMemLine##*: }
+
+		if [ "x$k" == "xUse" ] ; then
+			memUse=$v
+			continue
+		fi
+		if [ "x$k" == "xMaximum Capacity" ] && [ "x$memUse" == "xSystem Memory" ] ; then
+			memTotal=$v
+		fi
+	done
+
+	if [ "x$memTotal" == "x" ] ; then
+		memLine=`dmesg | grep '] Memory:'`
+
+		# TODO: check if dmesg accessible
+		# propose to allow it via `sudo sysctl kernel.dmesg_restrict=0`
+		# or permanent change via /etc/sysctl.d/10-local.conf
+
+		oldIFS=$IFS
+		IFS=" "
+		for memSize in ${memLine##*K/} ; do
+			if [[ $memSize == [0-9]*K ]] ; then
+				if [ "x$memTotal" == "x" ] ; then
+					memTotal=$memSize
+					continue
+				fi
+				memLastSize=$memSize
+				continue
+			fi
+			if [[ $memSize == cma-reserved* ]] ; then
+				memCMA=$memLastSize
+			fi
+		done
+		IFS=$oldIFS
+	fi
+
+	addParam "memTotal" "$memTotal"
+	addParam "memCMA" "$memCMA"
+
+	# special case for raspberry
+	videoCoreGpuMem=$(vcgencmd get_mem gpu 2>/dev/null)
+	if [ "x$videoCoreGpuMem" != "x" ] ; then
+		addParam "memVideoSlice" ${videoCoreGpuMem##gpu=}
+	fi
+
+	# !!! Useful info, finally https://unix.stackexchange.com/questions/192640/how-do-i-tell-which-device-tree-blob-dtb-file-im-using
+	# uboot have it's own idea how to name models
+	# https://git.denx.de/?a=project_list;pf=u-boot
+	# for example
+	# https://git.denx.de/?p=u-boot/u-boot-bcm.git;a=blob;f=arch/arm/dts/bcm2835-rpi-b-rev2.dts;h=e860964e39fa9ce61fee3f858924019df37fdf81;hb=9821636b641cbbeed1b6c89641d0649d386650db
+
+	ubootModel=$(cat /proc/device-tree/model 2>/dev/null)
+
+	if [ "x$ubootModel" != "x" ] ; then
+		addParam "productName" "$ubootModel"
+	else
+		dmiDir=/sys/devices/virtual/dmi/id/
+
+		addParam "productVendor" "$(cat $dmiDir/sys_vendor)" # GIGABYTE
+		addParam "productName" "$(cat $dmiDir/product_name)" # GB-BSi5-6200
+		addParam "productVersion" "$(cat $dmiDir/product_version)" # 1.x
+		# product_serial
+
+		addParam "boardVendor" "$(cat $dmiDir/board_vendor)" # GIGABYTE
+		addParam "boardName" "$(cat $dmiDir/board_name)" # MKLP5AP-00
+		addParam "boardVersion" "$(cat $dmiDir/board_version)" # 1.x
+		# board_serial
+
+		#cat $dmiDir/board_vendor # GIGABYTE
+		#cat $dmiDir/board_name # MKLP5AP-00
+		#cat $dmiDir/board_version # 1.x
+		#cat $dmiDir/board_serial # 1.x
+
+		addParam "biosDate" "$(cat $dmiDir/bios_date)" # 01/29/2016
+		#addParam "biosVendor" "$(cat $dmiDir/bios_vendor)" # American Megatrends Inc.
+		addParam "biosVersion" "$(cat $dmiDir/bios_version)" # F5
+
+		# TODO: chassis
+		# chassis_asset_tag Default string
+		# chassis_serial ***_Unavailable_***
+		# chassis_type 9
+		# chassis_vendor Default string
+		# chassis_version Default string
+	fi
+
+
+fi
+
+if [ "x$os" == "xDarwin" ] ; then
+	#model=`system_profiler SPHardwareDataType | awk '/Model Identifier/ {print \$3}'`
+
+	for sysctlLine in `sysctl hw` ; do
+		k=${sysctlLine%%:*}
+		v=${sysctlLine##*: }
+		if [ "x$k" == "xhw.logicalcpu" ] ; then
+			addParam "cpuThreads" $v
+			#config[cpuThreads]=$v
+		fi
+		if [ "x$k" == "xhw.physicalcpu" ] ; then
+			addParam "cpuCores" $v
+		fi
+		if [ "x$k" == "xhw.packages" ] ; then
+			addParam "cpuSockets" $v
+		fi
+		if [ "x$k" == "xhw.memsize" ] ; then
+			addParam "memTotal" $v
+		fi
+	done
+
+	addParam "productVendor" Apple
+
+	for sysctlLine in `system_profiler SPHardwareDataType` ; do
+		k=${sysctlLine%%:*}
+		k="${k#"${k%%[![:space:]]*}"}"
+		v=${sysctlLine##*: }
+		#echo "$k => $v"
+
+		if [ "x$k" == "xModel Name" ] ; then
+			addParam "productName" $v
+		fi
+		if [ "x$k" == "xModel Identifier" ] ; then
+			addParam "productVersion" $v
+		fi
+	done
+fi
+
+#for ((i = 0; i < ${#config[@]}; i++)) ; do
+#	echo "${config[$i]}"
+#done
+
+
+IFS=$oldIFS
+
+# Good old not used protocol
+#system-monitor     2609        tcp    System Monitor               [Greg_Robson_Garth]                                   [Greg_Robson_Garth]
+#system-monitor     2609        udp    System Monitor               [Greg_Robson_Garth]                                   [Greg_Robson_Garth]
+
+if [ "x$1" != "xinstall" ] ; then
+
+	if [ "x$os" == "xDarwin" ] ; then
+
+		# dns-sd -R tt1 _http._tcp,_system-info . 50105 "${config[@]/#/}"
+		dns-sd -R "$hostname-sysinfo" _http._tcp . 50105 "${config[@]/#/}"
+	fi
+
+	if [ "x$os" == "xLinux" ] ; then
+		# avahi-publish -s --subtype=_system-info tt1 _http._tcp 50105 "${config[@]/#/}"
+		avahi-publish -s "$hostname-sysinfo" _http._tcp 50105 "${config[@]/#/}"
+	fi
+
+	exit 0
+fi
+
+scriptPath="$( cd "$(dirname "$0")" ; pwd -P )/$(basename "$0")"
+
+cp $scriptPath /usr/local/bin/kalancha
+
+if [ "x$os" == "xLinux" ] ; then
+
+read -r -d '' SYSTEMD_SERVICE << SYSTEMD_SERVICE
+[Unit]
+Description=Kalancha
+After=avahi-daemon.service
+
+[Service]
+User=nobody
+ExecStart=/usr/local/bin/kalancha
+Restart=always
+RestartSec=500ms
+StartLimitInterval=0
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target
+SYSTEMD_SERVICE
+
+	systemdServicePath=/etc/systemd/system/kalancha.service
+
+	#$(systemd stop $systemdServicePath 2>/dev/null)
+	#$(systemd disable $systemdServicePath 2>/dev/null)
+
+	printf "%s" "$SYSTEMD_SERVICE" > $systemdServicePath
+
+	systemctl daemon-reload
+	systemctl restart kalancha.service
+
+read -r -d '' AVAHI_SERVICE_XML << AVAHI_SERVICE_XML
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+
+<service-group>
+	<name replace-wildcards="yes">System monitor %h</name>
+	<service protocol="any">
+		<type>_http._tcp</type>
+		<subtype>_monitor._sub._http._tcp</subtype>
+		<port>8888</port>
+		<txt-record>model=${ubootModel}</txt-record>
+		<txt-record>os=linux</txt-record>
+		<txt-record>arch=</txt-record>
+	</service>
+</service-group>
+AVAHI_SERVICE_XML
+
+fi
+
+if [ "x$os" == "xDarwin" ] ; then
+
+read -r -d '' MACOS_PLIST << MACOS_PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>Label</key>
+  <string>info.kalancha</string>
+  <key>ProgramArguments</key>
+  <array>
+	<string>/usr/local/bin/kalancha</string>
+  </array>
+  <key>StandardErrorPath</key>
+  <string>/private/var/log/kalancha.log</string>
+</dict>
+</plist>
+MACOS_PLIST
+
+	launchdServicePath=/Library/LaunchDaemons/info.kalancha.plist
+
+	$(launchctl unload $launchdServicePath 2>/dev/null)
+
+	printf "%s" "$MACOS_PLIST" > $launchdServicePath
+
+	launchctl load $launchdServicePath
+
+fi

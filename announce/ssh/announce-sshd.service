@@ -1,0 +1,13 @@
+[Unit]
+Description=Announce for SSH daemon
+Requires=sshd.service
+After=sshd.service
+
+[Service]
+Type=simple
+ExecStart=/bin/sh -c 'avahi-publish -s "$(hostname)" _ssh._tcp 22 "SSH"'
+Restart=always
+TimeoutSec=60
+
+[Install]
+WantedBy=sshd.service

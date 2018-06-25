@@ -32,7 +32,7 @@ if [ "x$os" == "xLinux" ] ; then
 fi
 
 if [ "x$os" == "xDarwin" ] ; then
-	addParam "osName" $(sw_vers -productName)
+	addParam "osName" "$(sw_vers -productName)"
 	addParam "osVersion" $(sw_vers -productVersion)
 	addParam "osBuild" $(sw_vers -buildVersion)
 fi

@@ -251,21 +251,17 @@ fi
 
 IFS=$oldIFS
 
-# Good old not used protocol
-#system-monitor     2609        tcp    System Monitor               [Greg_Robson_Garth]                                   [Greg_Robson_Garth]
-#system-monitor     2609        udp    System Monitor               [Greg_Robson_Garth]                                   [Greg_Robson_Garth]
-
 if [ "x$1" != "xinstall" ] ; then
 
 	if [ "x$os" == "xDarwin" ] ; then
 
-		# dns-sd -R tt1 _http._tcp,_system-info . 50105 "${config[@]/#/}"
-		dns-sd -R "$hostname-sysinfo" _http._tcp . 50105 "${config[@]/#/}"
+		# now using port 9 for serviceless announcement
+		dns-sd -R "$hostname" _device-info._tcp . 9 "${config[@]/#/}"
 	fi
 
 	if [ "x$os" == "xLinux" ] ; then
-		# avahi-publish -s --subtype=_system-info tt1 _http._tcp 50105 "${config[@]/#/}"
-		avahi-publish -s "$hostname-sysinfo" _http._tcp 50105 "${config[@]/#/}"
+		# now using port 9 for serviceless announcement
+		avahi-publish -s "$hostname" _device-info._tcp 9 "${config[@]/#/}"
 	fi
 
 	exit 0

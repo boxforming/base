@@ -1,4 +1,4 @@
-Import-Module $PSScriptRoot\..\scripts\boxforming -Force
+Import-Module $PSScriptRoot\..\scripts\boxforming.psm1 -Force
 
 Describe "Import-Module BoxForming" {
   Context "Module Exports" {

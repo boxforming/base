@@ -36,14 +36,14 @@ New-Module -Name BoxForming  -ScriptBlock {
 
 	# iex(gc ".\ConfigureRemotingForAnsible.ps1" -raw)
 	if (Test-Path -Path ".\ConfigureRemotingForAnsible.ps1") {
-		Write-Host "Using local script to configure WinRM"
+		Write-Verbose "Using local script to configure WinRM"
 		$AnsibleRes = Get-Content ".\ConfigureRemotingForAnsible.ps1" -Raw
 	} else {
-		Write-Host "Downloading script to configure WinRM"
+		Write-Verbose "Loading script to configure WinRM"
 		$AnsibleRes = Invoke-WebRequest -UseBasicParsing $BinnedAnsibleWinRMScript
 	}
 	
-	Function Configure-WinRM {
+	Function Enable-WinRM {
 		Param(
         	[parameter(ValueFromRemainingArguments = $true)]
         	[string[]]$Passthrough
@@ -330,20 +330,6 @@ namespace Boxforming {
 
 	}
 
-	Function Download-Cert {
-		[CmdletBinding()]
-		Param (
-			[string] $Url,
-			[string] $File
-		)
-		
-		$startTime = Get-Date
-
-		Invoke-WebRequest -Uri $Url -OutFile $File
-		Write-Verbose "Time taken: $((Get-Date).Subtract($start_time).Seconds) second(s)"
-	}
-
-
 	Function Add-Cert {
 		Param (
 			$StoreName,
@@ -358,14 +344,21 @@ namespace Boxforming {
 		
 	}
 
-
 	
-	Function Assign-Cert {
+	Function Import-ClientAuthCert {
 		[CmdletBinding()]
 		Param (
-			[string] $File
+			[string] $File,
+			[string] $Url
 		)
 		
+		if ($Url) {
+			$startTime = Get-Date
+
+			Invoke-WebRequest -Uri $Url -OutFile $File
+			# Write-Verbose "Time taken: $((Get-Date).Subtract($start_time).Seconds) second(s)"
+		}
+
 		# here issuing certificate == pubkey
 		$Cert = New-Object -TypeName System.Security.Cryptography.X509Certificates.X509Certificate2
 		
@@ -568,7 +561,7 @@ namespace Boxforming {
 	# USB selective suspend setting ?
 	# Wireless Adapter Settings
 
-	Function Setup-Insomnia {
+	Function Initialize-Insomnia {
 		$PowerSource = "ac"
 		$PowerDomains = @("monitor", "disk", "standby", "hibernate")
 		Foreach ($PowerDomain in $PowerDomains) {
@@ -664,19 +657,22 @@ namespace Boxforming {
 	# Set-Alias install -Value Install-Project
 
 	# Export-ModuleMember -Function 'Assign-Cert','Download-Cert','Install-WinRM','Create-CertSelfSigned','Create-CertCOM','Bar','Install-Project' -Alias 'install' -Variable ErrorActionPreference
-	Export-ModuleMember -Function 'Setup-Insomnia','Assign-Cert','Download-Cert','Configure-WinRM','New-ClientAuthCert','Start-CertShareServer' -Variable ErrorActionPreference
-#} -AsCustomObject
+
+	Write-Host "`r`nCommands:"
+	Write-Host "`r`nWinRM setup for controlled machine:"
+	Write-Host "Configure-WinRM -Verbose"
+	Write-Host "Import-ClientAuthCert -Url http://site.com/cert.pem  -File C:\Users\admin\cert.pem"
+	Write-Host "or"
+	Write-Host "Import-ClientAuthCert -File C:\Users\admin\cert.pem"
+	Write-Host "Initialize-Insomnia"
+	Write-Host "`r`nTools for controller machine:"
+	Write-Host "New-ClientAuthCert -Username"
+	Write-Host "Start-CertShareServer"
+	Write-Host ""
+
+	Export-ModuleMember -Function 'Initialize-Insomnia','Import-ClientAuthCert','Enable-WinRM','New-ClientAuthCert','Start-CertShareServer' -Variable ErrorActionPreference
+
+	#} -AsCustomObject
 
 #Export-ModuleMember -Variable BoxForming
 }
-
-Write-Output "`r`nCommands:"
-Write-Output "`r`nWinRM setup for controlled machine:"
-Write-Output "Configure-WinRM -Verbose"
-Write-Output "Download-Cert -Url http://site.com/cert.pem -File cert.pem"
-Write-Output "Assign-Cert -File C:\Users\admin\cert.pem"
-Write-Output "Setup-Insomnia"
-Write-Output "`r`nTools for controller machine:"
-Write-Output "New-ClientAuthCert -Username"
-Write-Output "Start-CertShareServer"
-Write-Output ""

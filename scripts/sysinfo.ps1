@@ -6,7 +6,11 @@
 
 # powershell -executionpolicy RemoteSigned scripts\sysinfo.ps1
 
-function get-Sysinfo {
+New-Module -Name SysInfo  -ScriptBlock {
+
+	$ErrorActionPreference = "Continue"
+
+function Get-Sysinfo {
 	param(
 		$computername =$env:computername
 	)
@@ -94,11 +98,25 @@ function get-Sysinfo {
 
 	$results
 
+ ####################################Bios function end############################
+
+
 }
 
+	Function Start-MDNSAnnounce {
+		$sysinfo=Get-Sysinfo
 
+		$dnsSDArgs  = @("-R", "$($sysinfo.psobject.properties['hostname'])-sysinfo", "_http._tcp", ".", "50105")
+		$dnsSDArgs += $sysinfo.psobject.properties|%{$_.Name + "=" + $sysinfo.($_.Name)}
 
- ####################################Bios function end############################
+		&dns-sd $dnsSDArgs
+
+	}
+
+	Export-ModuleMember -Function 'Get-Sysinfo','Start-MDNSAnnounce' -Variable ErrorActionPreference
+
+}
+
 
  #server location
 
@@ -114,12 +132,6 @@ function get-Sysinfo {
 
  #$infbios | export-csv -path c:\Bios.csv
 
-$sysinfo=get-Sysinfo
-
-$dnsSDArgs  = @("-R", "$($sysinfo.psobject.properties['hostname'])-sysinfo", "_http._tcp", ".", "50105")
-$dnsSDArgs += $sysinfo.psobject.properties|%{$_.Name + "=" + $sysinfo.($_.Name)}
-
-&dns-sd $dnsSDArgs
 
 # https://technet.microsoft.com/en-us/library/ee156537.aspx
 # wmic systemenclosure get chassistypes

@@ -350,7 +350,7 @@ namespace Boxforming {
 		Param (
 			[string] $File,
 			[string] $Url,
-			[string] $Password
+			[SecureString] $Password
 		)
 		
 		if ($Url) {

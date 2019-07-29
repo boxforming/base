@@ -45,7 +45,9 @@ Describe "Import-Module BoxForming" {
     }
 
     It "Certificate for non-existing user" {
-      Import-ClientAuthCert -File "$env:HOMEDRIVE$env:HOMEPATH\$Script:Username.crt.pem" -Password $Script:Password
+      {
+        Import-ClientAuthCert -File "$env:HOMEDRIVE$env:HOMEPATH\$Script:Username.crt.pem" -Password $Script:Password
+      } | Should -Throw
     }
 
     It "Should create new local user" {

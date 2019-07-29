@@ -349,7 +349,8 @@ namespace Boxforming {
 		[CmdletBinding()]
 		Param (
 			[string] $File,
-			[string] $Url
+			[string] $Url,
+			[string] $Password
 		)
 		
 		if ($Url) {
@@ -407,7 +408,9 @@ namespace Boxforming {
 			Write-Verbose "Certficate's Subject matches current user"
 		}
 
-		$Password = Read-Host -Prompt "Enter password for $($CertUsername)" -AsSecureString
+		If (!$Password) {
+			$Password = Read-Host -Prompt "Enter password for $($CertUsername)" -AsSecureString
+		}
 
 		$StoreName = [System.Security.Cryptography.X509Certificates.StoreName]::Root
 
@@ -578,13 +581,18 @@ namespace Boxforming {
 			$Username,
 			
 			[string]
+			$Password,
+
+			[string]
 			$Description,
 			
 			[string]
 			$FullName
 		)
 
-		$Password = Read-Host -AsSecureString
+		If (!$Password) {
+			$Password = Read-Host -AsSecureString
+		}
 
 		Add-Type -AssemblyName  System.DirectoryServices.AccountManagement
 

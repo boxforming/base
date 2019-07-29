@@ -39,7 +39,7 @@ Describe "Import-Module BoxForming" {
 
     It "Should be able to enable WinRM with locally installed latest 'ConfigureWinRMForAnsible.ps1'" {
       $LatestAnsibleWinRMScript = "https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1"
-      Invoke-WebRequest -Uri $Url -OutFile "ConfigureRemotingForAnsible.ps1"
+      Invoke-WebRequest -Uri $LatestAnsibleWinRMScript -OutFile "ConfigureRemotingForAnsible.ps1"
       Enable-WinRM -Verbose
       1 | Should -BeExactly 1
     }

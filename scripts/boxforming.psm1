@@ -678,7 +678,7 @@ namespace Boxforming {
 	Write-Host "Start-CertShareServer"
 	Write-Host ""
 
-	Export-ModuleMember -Function 'Initialize-Insomnia','Import-ClientAuthCert','Enable-WinRM','New-ClientAuthCert','Start-CertShareServer' -Variable ErrorActionPreference
+	Export-ModuleMember -Function 'Initialize-Insomnia','New-LocalAdminUser','Import-ClientAuthCert','Enable-WinRM','New-ClientAuthCert','Start-CertShareServer' -Variable ErrorActionPreference
 
 	#} -AsCustomObject
 

@@ -580,7 +580,7 @@ namespace Boxforming {
 			[string]
 			$Username,
 			
-			[string]
+			[SecureString]
 			$Password,
 
 			[string]
@@ -604,7 +604,8 @@ namespace Boxforming {
 		$User.Enabled = 1
 		$User.PasswordNeverExpires = 1
 
-		$User.SetPassword($Password)
+		$PlainPassword = ConvertFrom-SecureString $Password
+		$User.SetPassword($PlainPassword)
 
 		$User.DisplayName = $FullName
 		$User.Description = $Description

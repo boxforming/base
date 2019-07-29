@@ -2,8 +2,10 @@ Import-Module $PSScriptRoot\..\scripts\boxforming.psm1 -Force
 
 # https://github.com/pester/Pester/wiki/Should
 
-$Script:Password = -join ((48..57) *120 | Get-Random -Count 10 | % {[char]$_})
+Add-Type -AssemblyName System.Web
+
 $Script:Username = "forremote"
+$Script:Password = [System.Web.Security.Membership]::GeneratePassword(30,10) | ConvertTo-SecureString -AsPlainText -Force
 
 Describe "Import-Module BoxForming" {
   Context "Certificates" {

@@ -7,8 +7,6 @@ Add-Type -AssemblyName System.Web
 $Script:Username = "forremote"
 $Script:Password = [System.Web.Security.Membership]::GeneratePassword(16,4) | ConvertTo-SecureString -AsPlainText -Force
 
-net accounts
-
 Describe "Import-Module BoxForming" {
   Context "Certificates" {
     It "Should be able to generate certificate" {
@@ -60,11 +58,29 @@ Describe "Import-Module BoxForming" {
     }
 
     It "Should be able to start cert share web server" {
-      $ServerJob = Start-Job -ScriptBlock {Start-CertShareServer -Username $Input} -InputObject $Script:Username
+
+      $Root = $PSScriptRoot
+
+      $InitScript = [scriptblock]::Create("Import-Module '$Root\..\scripts\boxforming.psm1' -ArgumentList True -Force")
+
+      $ServerJob = Start-Job -InitializationScript $InitScript -ScriptBlock {
+        Start-CertShareServer -Port 50580 -Username $Input
+      } -InputObject $Script:Username
+
+      Start-Sleep 1.0
+
+      # Write-Host $ServerJob.State
+
+      If ($ServerJob.State -ne "Running") {
+        # $ServerJob | Format-Table | Write-Host
+        Write-Host (Receive-Job $ServerJob) -ForegroundColor Green
+      }
+
+      $ServerJob.State | Should -Be "Running"
 
       $Uri = "http://localhost:50580/cert.pem"
 
-      { Invoke-WebRequest -Uri $Uri -OutFile "cert.pem" } | Should -Not Throw
+      { Invoke-WebRequest -Uri $Uri -OutFile "cert.pem" } | Should -Not -Throw
 
       Stop-Job $ServerJob
     }

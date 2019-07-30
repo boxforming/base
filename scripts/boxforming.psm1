@@ -555,6 +555,8 @@ namespace Boxforming {
 			[string]$IndexFilename = "index.html"
 		)
 
+		New-NetFirewallRule -Name "CertSharing$Port" -DisplayName "Cert Sharing Server" -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Port
+
 		$Listener = New-Object System.Net.Sockets.TcpListener(
 			[System.Net.IPAddress]::Any, $Port
 		)
@@ -630,7 +632,8 @@ namespace Boxforming {
 			} while ($true)
         } finally {
             # https://stackoverflow.com/questions/1710698/gracefully-stopping-in-powershell
-            $Listener.Stop()
+			$Listener.Stop()
+			Remove-NetFirewallRule -Name "CertSharing$Port"
         }
 	}
 
@@ -675,7 +678,7 @@ namespace Boxforming {
 
 				return "ROOT"
 			}
-			"cert.pem" = {
+			"/cert.pem" = {
 				param($Writer)
 
 				$ContentType = "application/x-pem-file" # "application/x-x509-ca-cert" # application/x-pem-file

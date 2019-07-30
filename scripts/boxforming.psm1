@@ -22,6 +22,9 @@ if ($myWindowsPrincipal.IsInRole($adminRole)) {
 
 
 New-Module -Name BoxForming  -ScriptBlock {
+	param(
+    	[parameter(Position=0,Mandatory=$false)][boolean] $BeQuiet=$true
+	)
 # $BoxForming = New-Module -Name BoxFormingClosure  -ScriptBlock {
 
 	# Support for -Verbose option
@@ -702,17 +705,19 @@ namespace Boxforming {
 
 	# Export-ModuleMember -Function 'Assign-Cert','Download-Cert','Install-WinRM','Create-CertSelfSigned','Create-CertCOM','Bar','Install-Project' -Alias 'install' -Variable ErrorActionPreference
 
-	Write-Host "`r`nCommands:"
-	Write-Host "`r`nWinRM setup for controlled machine:"
-	Write-Host "Configure-WinRM -Verbose"
-	Write-Host "Import-ClientAuthCert -Url http://site.com/cert.pem  -File C:\Users\admin\cert.pem"
-	Write-Host "or"
-	Write-Host "Import-ClientAuthCert -File C:\Users\admin\cert.pem"
-	Write-Host "Initialize-Insomnia"
-	Write-Host "`r`nTools for controller machine:"
-	Write-Host "New-ClientAuthCert -Username"
-	Write-Host "Start-CertShareServer"
-	Write-Host ""
+	if (!$BeQuiet) {
+		Write-Host "`r`nCommands:"
+		Write-Host "`r`nWinRM setup for controlled machine:"
+		Write-Host "Configure-WinRM -Verbose"
+		Write-Host "Import-ClientAuthCert -Url http://site.com/cert.pem  -File C:\Users\admin\cert.pem"
+		Write-Host "or"
+		Write-Host "Import-ClientAuthCert -File C:\Users\admin\cert.pem"
+		Write-Host "Initialize-Insomnia"
+		Write-Host "`r`nTools for controller machine:"
+		Write-Host "New-ClientAuthCert -Username"
+		Write-Host "Start-CertShareServer"
+		Write-Host ""
+	}
 
 	Export-ModuleMember -Function 'Initialize-Insomnia','New-LocalAdminUser','Import-ClientAuthCert','Enable-WinRM','New-ClientAuthCert','Start-CertShareServer' -Variable ErrorActionPreference
 

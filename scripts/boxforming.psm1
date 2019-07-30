@@ -604,13 +604,16 @@ namespace Boxforming {
 		$User.Enabled = 1
 		$User.PasswordNeverExpires = 1
 
-		$PlainPassword = ConvertFrom-SecureString $Password
+		$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
+		$PlainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
 		$User.SetPassword($PlainPassword)
 
 		$User.DisplayName = $FullName
 		$User.Description = $Description
 
 		$User.Save()
+
+		[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
 
 		# $AdminGroup = Get-CimInstance Win32_Group -Filter "LocalAccount=True AND SID='S-1-5-32-544'"
 

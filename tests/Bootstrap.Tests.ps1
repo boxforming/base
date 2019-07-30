@@ -5,7 +5,9 @@ Import-Module $PSScriptRoot\..\scripts\boxforming.psm1 -Force
 Add-Type -AssemblyName System.Web
 
 $Script:Username = "forremote"
-$Script:Password = [System.Web.Security.Membership]::GeneratePassword(30,10) | ConvertTo-SecureString -AsPlainText -Force
+$Script:Password = [System.Web.Security.Membership]::GeneratePassword(16,4) | ConvertTo-SecureString -AsPlainText -Force
+
+net accounts
 
 Describe "Import-Module BoxForming" {
   Context "Certificates" {

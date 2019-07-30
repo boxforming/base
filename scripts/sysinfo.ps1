@@ -137,3 +137,9 @@ function Get-Sysinfo {
 # wmic systemenclosure get chassistypes
 # ChassisTypes
 # {9}
+
+
+# install
+# https://stackoverflow.com/questions/20575257/how-do-i-run-a-powershell-script-when-the-computer-starts
+# schtasks /create /tn "start" /sc onstart /delay 0000:30 /rl highest /ru system /tr "powershell.exe -file <<The powershell script path>>
+# HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run

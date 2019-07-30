@@ -387,6 +387,12 @@ namespace Boxforming {
 		# remove CN= from cert subject
 		$CertUsername = ($Cert.Subject).Substring(3)
 
+		# WinRM doesn't allow to add certificate for non-local users:
+		# The WINRM certificate mapping configuration operation cannot be completed because the user credentials
+		# could not be verified.  Please check the username and password used for mapping this certificate and verify that it is
+		# a non-domain account and try again.
+		# New-Item -Path WSMan:\localhost\ClientCertificate `
+
 		# Get-LocalUser not available on Windows 8.1
 		# $HaveCertUser = Get-LocalUser -Name $CertUsername -ErrorAction SilentlyContinue
 		$HaveCertUser = @(Get-CimInstance Win32_UserAccount -Filter "LocalAccount=True AND Name='$($CertUsername)'").Count

@@ -458,6 +458,76 @@ namespace Boxforming {
 
 	}
 
+	# powercfg.exe -x -monitor-timeout-ac 0
+	# USB selective suspend setting ?
+	# Wireless Adapter Settings
+
+	Function Initialize-Insomnia {
+		$PowerSource = "ac"
+		$PowerDomains = @("monitor", "disk", "standby", "hibernate")
+		Foreach ($PowerDomain in $PowerDomains) {
+			$PowerOption = "-$($PowerDomain)-timeout-$($PowerSource)"
+			powercfg.exe -x $PowerOption 0
+		}
+	}
+
+	Function New-LocalAdminUser {
+		param(
+			[Parameter(Mandatory=$true)]
+			[ValidateLength(1,20)]
+			[string]
+			$Username,
+			
+			[SecureString]
+			$Password,
+
+			[string]
+			$Description,
+			
+			[string]
+			$FullName
+		)
+
+		If (!$Password) {
+			$Password = Read-Host -AsSecureString
+		}
+
+		Add-Type -AssemblyName  System.DirectoryServices.AccountManagement
+
+		$MachineContext = [DirectoryServices.AccountManagement.ContextType]::Machine
+		$PrincipalContext = New-Object 'DirectoryServices.AccountManagement.PrincipalContext' ($MachineContext)
+		$User = New-Object 'DirectoryServices.AccountManagement.UserPrincipal' $PrincipalContext
+		
+		$User.SamAccountName = $Username
+		$User.Enabled = 1
+		$User.PasswordNeverExpires = 1
+
+		$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
+		$PlainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+		$User.SetPassword($PlainPassword)
+
+		$User.DisplayName = $FullName
+		$User.Description = $Description
+
+		$User.Save()
+
+		[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+
+		# $AdminGroup = Get-CimInstance Win32_Group -Filter "LocalAccount=True AND SID='S-1-5-32-544'"
+
+		# [DirectoryServices.AccountManagement.GroupPrincipal]
+		$GroupSidType = [System.DirectoryServices.AccountManagement.IdentityType]::Sid
+		$Group = [System.DirectoryServices.AccountManagement.GroupPrincipal]::FindByIdentity($MachineContext, $GroupSidType, "S-1-5-32-544")
+
+		$Group.Members.Add($PrincipalContext, 'Sid', $User.Sid.Value)
+
+		$Group.Save()
+		$Group.Dispose()
+
+		return $User
+	
+	}
+
 	# https://github.com/ChristopherGLewis/PowerShellWebServers
 	# Why not System.Net.HttpListener?
 	# https://stackoverflow.com/questions/4019466/httplistener-access-denied
@@ -566,75 +636,6 @@ namespace Boxforming {
         }
 	}
 
-	# powercfg.exe -x -monitor-timeout-ac 0
-	# USB selective suspend setting ?
-	# Wireless Adapter Settings
-
-	Function Initialize-Insomnia {
-		$PowerSource = "ac"
-		$PowerDomains = @("monitor", "disk", "standby", "hibernate")
-		Foreach ($PowerDomain in $PowerDomains) {
-			$PowerOption = "-$($PowerDomain)-timeout-$($PowerSource)"
-			powercfg.exe -x $PowerOption 0
-		}
-	}
-
-	Function New-LocalAdminUser {
-		param(
-			[Parameter(Mandatory=$true)]
-			[ValidateLength(1,20)]
-			[string]
-			$Username,
-			
-			[SecureString]
-			$Password,
-
-			[string]
-			$Description,
-			
-			[string]
-			$FullName
-		)
-
-		If (!$Password) {
-			$Password = Read-Host -AsSecureString
-		}
-
-		Add-Type -AssemblyName  System.DirectoryServices.AccountManagement
-
-		$MachineContext = [DirectoryServices.AccountManagement.ContextType]::Machine
-		$PrincipalContext = New-Object 'DirectoryServices.AccountManagement.PrincipalContext' ($MachineContext)
-		$User = New-Object 'DirectoryServices.AccountManagement.UserPrincipal' $PrincipalContext
-		
-		$User.SamAccountName = $Username
-		$User.Enabled = 1
-		$User.PasswordNeverExpires = 1
-
-		$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
-		$PlainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-		$User.SetPassword($PlainPassword)
-
-		$User.DisplayName = $FullName
-		$User.Description = $Description
-
-		$User.Save()
-
-		[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
-
-		# $AdminGroup = Get-CimInstance Win32_Group -Filter "LocalAccount=True AND SID='S-1-5-32-544'"
-
-		# [DirectoryServices.AccountManagement.GroupPrincipal]
-		$GroupSidType = [System.DirectoryServices.AccountManagement.IdentityType]::Sid
-		$Group = [System.DirectoryServices.AccountManagement.GroupPrincipal]::FindByIdentity($MachineContext, $GroupSidType, "S-1-5-32-544")
-
-		$Group.Members.Add($PrincipalContext, 'Sid', $User.Sid.Value)
-
-		$Group.Save()
-		$Group.Dispose()
-
-		return $User
-	
-	}
 
 	Function Start-CertShareServer {
 		Param(

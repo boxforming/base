@@ -8,7 +8,9 @@ install:
 environment:
   APPVEYOR_RDP_PASSWORD: "/@}D9G7+mXRQNaqV"
 
-build: # off
+build: off
+
+before_test:
   - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
 
 test_script:

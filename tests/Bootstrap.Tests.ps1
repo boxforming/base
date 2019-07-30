@@ -59,6 +59,16 @@ Describe "Import-Module BoxForming" {
       Import-ClientAuthCert -File "$env:HOMEDRIVE$env:HOMEPATH\$Script:Username.crt.pem" -Password $Script:Password
     }
 
+    It "Should be able to start cert share web server" {
+      $ServerJob = Start-Job -ScriptBlock {Start-CertShareServer -Username $Input} -InputObject $Script:Username
+
+      $Uri = "http://localhost:50580/cert.pem"
+
+      { Invoke-WebRequest -Uri $Uri -OutFile "cert.pem" } | Should -Not Throw
+
+      Stop-Job $ServerJob
+    }
+
   }
 
 }

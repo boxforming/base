@@ -565,8 +565,6 @@ namespace Boxforming {
 
 		$Listener.Start()
 
-		$ContentType = "application/x-pem-file" # "application/x-x509-ca-cert" # application/x-pem-file
-
         try {
 			do {
 				# TODO: https://stackoverflow.com/questions/51218257/await-async-c-sharp-method-from-powershell
@@ -636,11 +634,18 @@ namespace Boxforming {
         }
 	}
 
-
 	Function Start-CertShareServer {
 		Param(
-			[int] $Port = 50580
+			[int] $Port = 50580,
+			[string] $Username = $env:USERNAME,
+			[string] $CertPath = "$env:HOMEDRIVE$env:HOMEPATH\$Username.crt.pem"
 		)
+
+		$ErrorActionPreference = "Stop"
+
+		$CertSize = (Get-Item $CertPath).length
+		$CertContents = Get-Content $CertPath
+
 		Start-WebServer -Port $Port -Handlers @{
 			"/favicon.ico" = {
 				param($Writer)
@@ -670,8 +675,25 @@ namespace Boxforming {
 
 				return "ROOT"
 			}
+			"cert.pem" = {
+				param($Writer)
+
+				$ContentType = "application/x-pem-file" # "application/x-x509-ca-cert" # application/x-pem-file
+
+				$Writer.Write("HTTP/1.1 200 OK`r`n")
+						
+				$Writer.Write("Content-Type: $ContentType`r`n")
+				$Writer.Write("Content-Length: $CertSize`r`n")
+				$Writer.Write("Connection: close`r`n`r`n")
+
+				$Writer.Write($CertContents)
+				$Writer.Close()
+
+				return "CERT"
+			}
 		}
 	} 
+
 
 	# Set-Alias install -Value Install-Project
 

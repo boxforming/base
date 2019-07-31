@@ -67,7 +67,7 @@ ard () {
 # https://feeding.cloud.geek.nz/posts/usual-server-setup/
 
 init_linux () {
-	sudo apt-get -y install openssh-server net-tools vim nano etckeeper git sudo
+	sudo apt-get -y install openssh-server net-tools vim nano etckeeper git sudo curl
 }
 
 # https://askubuntu.com/questions/47311/how-do-i-disable-my-system-from-going-to-sleep
@@ -134,6 +134,7 @@ if [ "x$UNAME_S" == "xDarwin" ] ; then
 elif [ "x$UNAME_S" == "xLinux" ] ; then
 
 	# init_linux
+	echo Linux
 
 else
 

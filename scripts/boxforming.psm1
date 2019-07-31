@@ -327,6 +327,16 @@ namespace Boxforming {
 		$PemOutput[$PemOutput.Length - 1] = "-----END CERTIFICATE-----" # removed extra newline
 		[System.IO.File]::WriteAllLines("$Path.crt.pem", $PemOutput)
 
+		$Windows10Build = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").ReleaseId
+		if (Get-Command "ssh-keygen.exe" -errorAction SilentlyContinue) {
+    		ssh-keygen.exe -f "$Path.key.pem" -y | Out-File -FilePath "$Path.key.pub"
+		} elseif ($Windows10Build -and $Windows10Build -gt 1809) {
+			Add-WindowsCapability -Online -Name OpenSSH.Client
+			ssh-keygen.exe -f "$Path.key.pem" -y | Out-File -FilePath "$Path.key.pub"
+		} else {
+			Write-Host "Cannot generate public key from private. Launch 'ssh-keygen.exe -f $Path.key.pem -y > $Path.key.pub' to do so"
+		}
+
 		return New-Object Security.Cryptography.X509Certificates.X509Certificate2 @(,[System.Convert]::FromBase64String($Cert.RawData()))
 
 	#endregion
@@ -644,13 +654,19 @@ namespace Boxforming {
 		Param(
 			[int] $Port = 50580,
 			[string] $Username = $env:USERNAME,
-			[string] $CertPath = "$env:HOMEDRIVE$env:HOMEPATH\$Username.crt.pem"
+			[string] $CertPath = "$env:HOMEDRIVE$env:HOMEPATH\$Username.crt.pem",
+			[string] $PubKeyPath = "$env:HOMEDRIVE$env:HOMEPATH\$Username.key.pub"
 		)
 
 		$ErrorActionPreference = "Stop"
 
 		$CertSize = (Get-Item $CertPath).length
 		$CertContents = Get-Content $CertPath
+
+		$ErrorActionPreference = "Continue"
+
+		$PubKeySize = (Get-Item $PubKeyPath).length
+		$PubKeyContents = Get-Content $PubKeyPath
 
 		Start-WebServer -Port $Port -Handlers @{
 			"/favicon.ico" = {
@@ -696,6 +712,22 @@ namespace Boxforming {
 				$Writer.Close()
 
 				return "CERT"
+			}
+			"/key.pub" = {
+				param($Writer)
+
+				$ContentType = "application/x-pub-file"
+
+				$Writer.Write("HTTP/1.1 200 OK`r`n")
+						
+				$Writer.Write("Content-Type: $ContentType`r`n")
+				$Writer.Write("Content-Length: $PubKeySize`r`n")
+				$Writer.Write("Connection: close`r`n`r`n")
+
+				$Writer.Write($PubKeyContents)
+				$Writer.Close()
+
+				return "PUBKEY"
 			}
 		}
 	} 

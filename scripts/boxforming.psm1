@@ -740,14 +740,15 @@ namespace Boxforming {
 	if (!$BeQuiet) {
 		Write-Host "`r`nCommands:"
 		Write-Host "`r`nWinRM setup for controlled machine:"
-		Write-Host "Configure-WinRM -Verbose"
+		Write-Host "Enable-WinRM -Verbose"
+		Write-Host "New-LocalAdminUser -Username"
 		Write-Host "Import-ClientAuthCert -Url http://site.com/cert.pem  -File C:\Users\admin\cert.pem"
 		Write-Host "or"
 		Write-Host "Import-ClientAuthCert -File C:\Users\admin\cert.pem"
 		Write-Host "Initialize-Insomnia"
 		Write-Host "`r`nTools for controller machine:"
 		Write-Host "New-ClientAuthCert -Username"
-		Write-Host "Start-CertShareServer"
+		Write-Host "Start-CertShareServer -Username"
 		Write-Host ""
 	}
 

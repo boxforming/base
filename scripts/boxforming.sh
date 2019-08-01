@@ -120,7 +120,28 @@ enable_firewall () {
 
 # sudo update-alternatives --config editor
 
+new_client_auth_cert () {
+	# Set the name of the local user that will have the key mapped to
+	CERT_USERNAME=${1:-${USER}}
+	TEMP_FILENAME=$(mktemp /tmp/winrm.XXXXXXXXX)
 
+	
+	cat > $TEMP_FILENAME << EOL
+distinguished_name = req_distinguished_name
+[req_distinguished_name]
+[v3_req_client]
+extendedKeyUsage = clientAuth
+subjectAltName = otherName:1.3.6.1.4.1.311.20.2.3;UTF8:$CERT_USERNAME@localhost
+EOL
+
+	export OPENSSL_CONF=$TEMP_FILENAME
+	openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -out $HOME/${CERT_USERNAME}.crt.pem -outform PEM -keyout $HOME/${CERT_USERNAME}.key.pem -subj "/CN=$CERT_USERNAME" -extensions v3_req_client
+	rm $TEMP_FILENAME
+
+	chmod 600 $HOME/${CERT_USERNAME}.key.pem
+
+	ssh-keygen -f $HOME/${CERT_USERNAME}.key.pem -y > $HOME/${CERT_USERNAME}.key.pub
+}
 
 if [ "x$UNAME_S" == "xDarwin" ] ; then
 	
@@ -142,3 +163,6 @@ else
 	exit 1
 
 fi
+
+echo "Tools for controller machine:"
+echo "new_client_auth_cert <username>"

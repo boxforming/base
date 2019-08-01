@@ -1,0 +1,4 @@
+language: bash
+script:
+  - source <(cat scripts/boxforming.sh)
+  - new_client_auth_cert

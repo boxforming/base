@@ -23,7 +23,8 @@ if ($myWindowsPrincipal.IsInRole($adminRole)) {
 
 New-Module -Name BoxForming  -ScriptBlock {
 	param(
-    	[parameter(Position=0,Mandatory=$false)][boolean] $BeQuiet=$true
+		[parameter(Position=0,Mandatory=$false)]
+		[boolean] $BeQuiet = $false
 	)
 # $BoxForming = New-Module -Name BoxFormingClosure  -ScriptBlock {
 

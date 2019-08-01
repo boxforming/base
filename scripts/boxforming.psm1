@@ -665,11 +665,11 @@ namespace Boxforming {
 		# $CertContents = Get-Content $CertPath | Out-String
 		$CertContents = [System.IO.File]::ReadAllText($CertPath)
 
-		$ErrorActionPreference = "Continue"
-
-		$PubKeySize = (Get-Item $PubKeyPath).length
+		$PubKeySize = (Get-Item $PubKeyPath -ErrorAction Continue).length
 		# $PubKeyContents = Get-Content $PubKeyPath | Out-String
+		if ($PubKeySize) {
 		$PubKeyContents = [System.IO.File]::ReadAllText($PubKeyPath)
+		}
 
 		Start-WebServer -Port $Port -Handlers @{
 			"/favicon.ico" = {

@@ -81,11 +81,12 @@ Describe "Import-Module BoxForming" {
       $Uri = "http://localhost:50580/cert.pem"
 
       {
-        $CertWebBytes = (Invoke-WebRequest -Uri $Uri -UseBasicParsing).Content
-        # Read the entire file to an array of bytes.
-
-        $CertWebContents = [System.Text.Encoding]::ASCII.GetString($CertWebBytes)
+        Invoke-WebRequest -Uri $Uri -UseBasicParsing
       } | Should -Not -Throw
+
+      $CertWebBytes = (Invoke-WebRequest -Uri $Uri -UseBasicParsing).Content
+
+      $CertWebContents = [System.Text.Encoding]::ASCII.GetString($CertWebBytes)
 
       # $bytes = [System.IO.File]::ReadAllBytes("path_to_the_file")
       $CertFileContents = [System.IO.File]::ReadAllText("$env:HOMEDRIVE$env:HOMEPATH\$Script:Username.crt.pem")

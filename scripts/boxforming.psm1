@@ -735,6 +735,25 @@ namespace Boxforming {
 		}
 	} 
 
+	Function TODO-Enable-WSL {
+		$HaveWSL = $false
+		Try {
+			if (Get-Command wsl.exe) {
+				$HaveWSL = $true
+			}
+		} Catch {
+		}
+
+		if (!$HaveWSL) {
+			# https://docs.microsoft.com/en-us/windows/wsl/install-on-server
+			Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux
+
+			# https://docs.microsoft.com/en-us/windows/wsl/install-manual
+		}
+
+		# TODO: install ansible
+	}
+
 
 	# Set-Alias install -Value Install-Project
 

@@ -80,9 +80,20 @@ Describe "Import-Module BoxForming" {
 
       $Uri = "http://localhost:50580/cert.pem"
 
-      { Invoke-WebRequest -Uri $Uri -OutFile "cert.pem" } | Should -Not -Throw
+      {
+        $CertWebContents = (Invoke-WebRequest -Uri $Uri -UseBasicParsing).Content.Trim()
+      } | Should -Not -Throw
+
+      $CertFileContents = "$env:HOMEDRIVE$env:HOMEPATH\$Script:Username.crt.pem"
+
+      $CertWebContents | Should -Be $CertFileContents
+
+      {
+        Import-ClientAuthCert -Url $Uri -Password $Script:Password
+      } | Should -Not -Throw
 
       Stop-Job $ServerJob
+
     }
 
   }

@@ -362,7 +362,7 @@ namespace Boxforming {
 	Function Import-ClientAuthCert {
 		[CmdletBinding()]
 		Param (
-			[string] $File,
+			[string] $File = "$env:HOMEDRIVE$env:HOMEPATH\crt.pem",
 			[string] $Url,
 			[SecureString] $Password
 		)
@@ -370,7 +370,7 @@ namespace Boxforming {
 		if ($Url) {
 			$startTime = Get-Date
 
-			Invoke-WebRequest -Uri $Url -OutFile $File
+			Invoke-WebRequest $Url -UseBasicParsing -OutFile $File
 			# Write-Verbose "Time taken: $((Get-Date).Subtract($start_time).Seconds) second(s)"
 		}
 

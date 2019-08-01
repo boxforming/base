@@ -95,7 +95,7 @@ Describe "Import-Module BoxForming" {
 
       {
         Import-ClientAuthCert -Url $Uri -Password $Script:Password
-      } | Should -Not -Throw
+      } | Should -Throw "The WS-Management service cannot create the resource because it already exists"
 
       Stop-Job $ServerJob
 

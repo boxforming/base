@@ -1,23 +1,31 @@
+image:
+  - Visual Studio 2015
+  - Ubuntu
+
+environment:
+  APPVEYOR_YML_DISABLE_PS_LINUX: true
+#  APPVEYOR_RDP_PASSWORD: "/@}D9G7+mXRQNaqV"
+
 skip_commits:
   files:
     - '**/*.md'
-
-install:
-  - cinst pester
-
-#environment:
-#  APPVEYOR_RDP_PASSWORD: "/@}D9G7+mXRQNaqV"
 
 build: off
 
 #before_test:
 #  - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
 
+install:
+  - ps: cinst pester
+
 test_script:
   - ps: |
       $testResultsFile = ".\TestsResults.xml"
       $res = Invoke-Pester -Path .\tests -OutputFormat NUnitXml -OutputFile $testResultsFile -PassThru
-      (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", (Resolve-Path $testResultsFile))
+      $resultsUploadUrl = "https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)"
+      (New-Object 'System.Net.WebClient').UploadFile($resultsUploadUrl, (Resolve-Path $testResultsFile))
       if ($res.FailedCount -gt 0) { 
           throw "$($res.FailedCount) tests failed."
       }
+  - sh: source <(cat scripts/boxforming.sh)
+  - sh: new_client_auth_cert

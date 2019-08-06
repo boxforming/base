@@ -88,7 +88,7 @@ ard () {
 # https://feeding.cloud.geek.nz/posts/usual-server-setup/
 
 init_linux () {
-	sudo $PKG_MGR $INSTALL_CMD openssh-server net-tools vim nano etckeeper git sudo curl
+	sudo $PKG_MGR $INSTALL_CMD net-tools vim nano etckeeper git sudo curl
 
 	# TODO: check for python, install ansible
 }
@@ -146,19 +146,40 @@ add_user_to_sudoers () {
 }
 
 enable_firewall () {
+	# debian
 	apt install ufw
-	ufw allow OpenSSH
+	ufw allow OpenSSH # ufw allow ssh
 	ufw enable
+	ufw status
+	# centos
+	# firewall-cmd --zone=public --permanent --add-service=ssh
+	# firewall-cmd --reload
 
 }
 
 start_cert_share_server () {
+	CERT_USERNAME=${1:-${USER}}
+	TEMP_DIRNAME=$(mktemp -d /tmp/certshare.XXXXXXXXX)
+
+	cp $HOME/${CERT_USERNAME}.crt.pem $TEMP_DIRNAME/cert.pem
+	cp $HOME/${CERT_USERNAME}.key.pub $TEMP_DIRNAME/key.pub
 	# https://stackoverflow.com/questions/39801718/how-to-run-a-http-server-which-serve-a-specific-path
 
-	python - <<PYTHON_END
-web_dir = os.path.join(os.path.dirname(__file__), 'web')
-os.chdir(web_dir)
-PYTHON_END
+	python - <<PYWEBSERVER
+import sys;
+import os;
+if "$STORE_PID" == "1":
+  pid = str(os.getpid());
+  pidfile = "./process.pid";
+  file(pidfile, 'w').write(pid);
+os.chdir('$TEMP_DIRNAME')
+if sys.version_info[:2] > (2,7):
+  import http.server as httpd;
+else:
+  import SimpleHTTPServer as httpd;
+httpd.test();
+PYWEBSERVER
+
 }
 
 # sudo update-alternatives --config editor
@@ -176,13 +197,12 @@ enable_sshd_linux () {
 			fi
 		fi
 	fi
-
-
-
 }
 
 enable_sshd_macos () {
+	SSHD_STATUS=$(sudo systemsetup -getremotelogin)
 	sudo launchctl load -w /System/Library/LaunchDaemons/ssh.plist
+	
 	# systemsetup -setremotelogin on # deprecated
 
 	# by default ssh is allowed only for machine administrators

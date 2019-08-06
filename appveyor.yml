@@ -19,7 +19,8 @@ install:
   - ps: cinst pester
   - sh: git clone https://github.com/bats-core/bats-core.git
   - sh: pushd bats-core
-  - sh: ./install.sh /usr/local
+  - sh: export PATH=$PATH:$HOME/bin
+  - sh: ./install.sh $HOME
   - sh: popd
 
 test_script:

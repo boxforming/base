@@ -1,6 +1,27 @@
 #!/bin/bash
 
 UNAME_S=`uname -s`
+PKG_MGR=
+INSTALL_CMD=" -y install"
+
+os_specific () {
+	if [[ "$OSTYPE" == "linux-gnu" ]]; then
+        # Linux
+
+		local FN="${1}_linux"
+
+	elif [[ "$OSTYPE" == "darwin"* ]]; then
+		# macOS
+
+		local FN="${1}_macos"
+
+	else
+		echo "System not supported"
+		# Unknown
+	fi
+
+	$FN
+}
 
 ard () {
 	ARD_CMD=$1
@@ -26,7 +47,7 @@ ard () {
 
 	# sudo launchctl kill KILL system/com.apple.screensharing
 
-		# https://apple.stackexchange.com/questions/278744/command-line-enable-remote-login-and-remote-management
+	# https://apple.stackexchange.com/questions/278744/command-line-enable-remote-login-and-remote-management
 	# https://support.apple.com/en-us/HT201710
 	# sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
 
@@ -67,12 +88,14 @@ ard () {
 # https://feeding.cloud.geek.nz/posts/usual-server-setup/
 
 init_linux () {
-	sudo apt-get -y install openssh-server net-tools vim nano etckeeper git sudo curl
+	sudo $PKG_MGR $INSTALL_CMD openssh-server net-tools vim nano etckeeper git sudo curl
+
+	# TODO: check for python, install ansible
 }
 
 # https://askubuntu.com/questions/47311/how-do-i-disable-my-system-from-going-to-sleep
 
-initialize_insomnia () {
+initialize_insomnia_linux () {
 	#	● sleep.target - Sleep
 	#   Loaded: loaded (/lib/systemd/system/sleep.target; static; vendor preset: enabled)
 	#   Active: inactive (dead)
@@ -100,6 +123,18 @@ initialize_insomnia () {
 
 }
 
+initialize_insomnia_macos () {
+	sudo systemsetup -setallowpowerbuttontosleepcomputer off
+	sudo systemsetup -setrestartfreeze on
+	sudo systemsetup -setrestartpowerfailure on
+	sudo systemsetup -setcomputersleep off
+	sudo systemsetup -setsleep off
+}
+
+initialize_insomnia () {
+	os_specific initialize_insomnia
+}
+
 NewLocalAdminUser () {
 	$USER_
 	/usr/sbin/usermod -a -G sudo user
@@ -117,15 +152,53 @@ enable_firewall () {
 
 }
 
+start_cert_share_server () {
+	# https://stackoverflow.com/questions/39801718/how-to-run-a-http-server-which-serve-a-specific-path
+
+	python - <<PYTHON_END
+web_dir = os.path.join(os.path.dirname(__file__), 'web')
+os.chdir(web_dir)
+PYTHON_END
+}
 
 # sudo update-alternatives --config editor
+
+# zypper install -y curl # -y should be after install
+
+enable_sshd_linux () {
+	if ! sudo systemctl is-active ssh ; then
+		if $PKG_MGR $INSTALL_CMD openssh-server ; then
+			if ! sudo systemctl is-active ssh ; then
+				if ! sudo systemctl is-enabled ssh ; then
+					sudo systemctl enable ssh
+				fi
+				sudo systemctl start ssh
+			fi
+		fi
+	fi
+
+
+
+}
+
+enable_sshd_macos () {
+	sudo launchctl load -w /System/Library/LaunchDaemons/ssh.plist
+	# systemsetup -setremotelogin on # deprecated
+
+	# by default ssh is allowed only for machine administrators
+	# dseditgroup -o create -q com.apple.access_ssh
+	# dseditgroup -o edit -a admin -t group com.apple.access_ssh
+}
+
+enable_sshd () {
+	os_specific enable_sshd
+}
 
 new_client_auth_cert () {
 	# Set the name of the local user that will have the key mapped to
 	CERT_USERNAME=${1:-${USER}}
 	TEMP_FILENAME=$(mktemp /tmp/winrm.XXXXXXXXX)
 
-	
 	cat > $TEMP_FILENAME << EOL
 distinguished_name = req_distinguished_name
 [req_distinguished_name]
@@ -136,6 +209,7 @@ EOL
 
 	export OPENSSL_CONF=$TEMP_FILENAME
 	openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -out $HOME/${CERT_USERNAME}.crt.pem -outform PEM -keyout $HOME/${CERT_USERNAME}.key.pem -subj "/CN=$CERT_USERNAME" -extensions v3_req_client
+	unset OPENSSL_CONF # export -n OPENSSL_CONF
 	rm $TEMP_FILENAME
 
 	chmod 600 $HOME/${CERT_USERNAME}.key.pem
@@ -145,7 +219,8 @@ EOL
 
 if [ "x$UNAME_S" == "xDarwin" ] ; then
 	
-	ard status
+	# ard status
+	echo macOS
 
 	# https://apple.stackexchange.com/questions/278744/command-line-enable-remote-login-and-remote-management
 
@@ -156,6 +231,14 @@ elif [ "x$UNAME_S" == "xLinux" ] ; then
 
 	# init_linux
 	echo Linux
+
+	[[ -x "/usr/bin/zypper" ]] && PKG_MGR="zypper" && PKG_INSTALL=" install -y"
+	[[ -x "/usr/bin/dnf" ]]    && PKG_MGR="dnf"
+	[[ -x "/usr/bin/yum" ]]    && PKG_MGR="yum"
+	[[ -x "/usr/bin/apt" ]]    && PKG_MGR="apt"
+	# packman ?
+
+	echo $PKG_MGR
 
 else
 

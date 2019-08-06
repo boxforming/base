@@ -17,6 +17,10 @@ build: off
 
 install:
   - ps: cinst pester
+  - sh: git clone https://github.com/bats-core/bats-core.git
+  - sh: pushd bats-core
+  - sh: ./install.sh /usr/local
+  - sh: popd
 
 test_script:
   - ps: |
@@ -27,5 +31,10 @@ test_script:
       if ($res.FailedCount -gt 0) { 
           throw "$($res.FailedCount) tests failed."
       }
+  # checks if code from documentation ok
+  - ps: iwr -useb https://raw.githubusercontent.com/boxforming/base/master/scripts/boxforming.psm1 | iex
+  - ps: New-ClientAuthCert -Username test
+  - sh: bats tests
+  # checks if code from documentation ok
   - sh: source <(cat scripts/boxforming.sh)
   - sh: new_client_auth_cert

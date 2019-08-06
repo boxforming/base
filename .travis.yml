@@ -1,4 +1,11 @@
 language: bash
+before_install:
+  - git clone https://github.com/bats-core/bats-core.git
+  - pushd bats-core
+  - ./install.sh /usr/local
+  - popd
 script:
+  - bats tests
+  # checks if code from documentation ok
   - source <(cat scripts/boxforming.sh)
   - new_client_auth_cert

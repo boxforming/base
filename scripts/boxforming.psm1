@@ -1,4 +1,5 @@
 #  . { iwr -useb http://apla.me/__2.ps1 } | iex
+#  . { gc -Raw .\boxforming.ps1 } | iex
 # Start-Process powershell "-NoProfile -NoExit -Command `" . { iwr -useb http://apla.me/__2.ps1 } | iex `"" -Verb RunAs
 
 #[CmdletBinding()]
@@ -389,7 +390,8 @@ namespace Boxforming {
 		$Thumbprints = @(Get-ChildItem -Path cert:\LocalMachine\root | Where-Object { $_.Thumbprint -eq $Cert.Thumbprint })
 
 		if ($Thumbprints.Count -gt 0) {
-			Write-Verbose "This certificate already imported"
+			Write-Host "This certificate already imported"
+			break
 		}
 
 		# import issuing certificate
@@ -448,7 +450,7 @@ namespace Boxforming {
 		# this is the issuer thumbprint which in the case of a self generated cert
 		# is the public key thumbprint, additional logic may be required for other
 		# scenarios
-		$Thumbprint = (Get-ChildItem -Path cert:\LocalMachine\root | Where-Object { $_.Subject -eq "CN=$CertUsername" }).Thumbprint
+		$Thumbprint = (Get-ChildItem -Path cert:\LocalMachine\root | Where-Object { $_.Subject -eq "CN=$CertUsername" } | Select-Object -first 1).Thumbprint
 
 		New-Item -Path WSMan:\localhost\ClientCertificate `
 			-Subject "$CertUsername@localhost" `
@@ -780,3 +782,5 @@ namespace Boxforming {
 
 #Export-ModuleMember -Variable BoxForming
 }
+
+# Import-ClientAuthCert -File C:\Users\apla\crt.pem -Verbose 

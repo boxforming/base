@@ -1,0 +1,188 @@
+---
+# This playbook will create user on empty linux server with ssh root account,
+# copy ssh public key, configure passwordless sudo with agent,
+# then check server access and disable root password access via ssh.
+#
+# I'm using it to setup new VPS
+# 
+# https://github.com/hudochenkov/homebrew-sshpass needs to be installed
+# 
+# HOWTO
+# Add server using inventory like this:
+# host_alias ansible_host=host ansible_port=2222 ansible_ssh_pass=12345 ansible_ssh_user=root new_user=username new_pass=$…
+# `ansible_host` and `ansible_port` is optional
+# `new_user` - username for new user
+# `new_pass` - encoded password
+- name: Create user on a linux server
+  hosts: all
+  become: yes
+  gather_facts: false
+  # TODO: maybe read some vars from stdin: https://serverfault.com/questions/550561/how-to-make-ansible-use-password-if-key-was-rejected
+  vars:
+    - user: apla
+    - password: ""
+    - ansible_python_interpreter: auto_silent
+    - reverse_hostname: "{{ inventory_hostname.split('.')[::-1] | join('.') }}"
+    - ssh_key_filename: "~/.ssh/{{ reverse_hostname }}"
+    - ssh_pub_filename: "~/.ssh/{{ reverse_hostname }}.pub"
+    - ansible_host_key_checking: false
+    - remote_port: "{{ hostvars[inventory_hostname].ansible_ssh_port | default(hostvars[inventory_hostname].ansible_port) | default('22') }}"
+
+  tasks:
+
+  - name: Check if user already created
+    block:
+    # multihost and multiuser https://stackoverflow.com/questions/56230982/verify-if-user-is-able-to-ssh-using-password
+    - name: Test if user can actually connect to the remote server
+      command: ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no -p {{ remote_port }} {{ user }}@{{ inventory_hostname }} "echo success"
+      delegate_to: localhost
+      register: user_ssh_connection_status
+      become: no
+      ignore_errors: true
+
+    - name: Test if user can run sudo command the remote server
+      command: ssh -A -o StrictHostKeyChecking=no -o PasswordAuthentication=no -p {{ remote_port }} {{ user }}@{{ inventory_hostname }} "sudo echo success"
+      delegate_to: localhost
+      register: user_ssh_sudo_status
+      become: no
+      ignore_errors: true
+
+    - name: Checks is ssh key pub file exists
+      local_action: stat path="{{ ssh_pub_filename }}"
+      register: ssh_pub_file_stat
+      become: no
+
+    - name: Generate ssh key pub file
+      local_action:
+        module: shell
+        cmd: ssh-keygen -t ssh-ed25519 -f {{ ssh_key_filename }} -q -N ""
+        # creates: "{{ ssh_pub_filename }}"
+      when: not ssh_pub_file_stat.stat.exists
+      become: no
+
+    - name: Add private key to agent
+      local_action:
+        module: shell
+        cmd: ssh-add {{ ssh_key_filename }}
+      become: no
+
+
+  # TODO: actually check if ~/.ssh/config contains ForwardAgent yes
+
+  - block:
+
+    # when: user_ssh_connection_status.stdout != "success"
+
+    - name: Create a login user
+      user:
+        name: "{{ user }}"
+        password: "{{ password }}"
+        shell: "/bin/bash"
+        groups:
+          - sudo
+        append: yes
+        state: present
+
+    - name: Add public key to authorized_keys
+      authorized_key:
+        user: "{{ user }}"
+        state: present
+        key: "{{ lookup('file', ssh_pub_filename) }}"
+  
+    when: user_ssh_connection_status.stdout != "success"
+
+  - block:
+
+    # when: user_ssh_sudo_status.stdout != "success"
+
+    - name: Install required packages
+      apt:
+        pkg:
+          - sudo
+          - libpam-ssh-agent-auth
+        state: present
+
+    # https://unix.stackexchange.com/questions/290456/pam-failing-to-authenticate-sudo-after-successfully-contacting-ssh-agent
+    # https://medium.com/byteschneiderei/setting-up-pam-ssh-agent-auth-for-sudo-login-7135330eb740
+    # https://dan.langille.org/2014/09/03/when-ssh-and-ansible-play-poorly-together/
+    # https://jpmens.net/2021/11/21/pam-ssh-agent-authentication-with-ansible/
+    # https://mike.depalatis.net/blog/sudo-ssh-auth.html
+    # protect ssh agent with password
+    # https://habr.com/ru/company/skillfactory/blog/503466/
+    # attack vector using ssh agent
+    # https://book.hacktricks.xyz/linux-unix/privilege-escalation/ssh-forward-agent-exploitation
+    # bastion host
+    # https://medium.com/@praneeth1691/running-ansible-with-ssh-agent-forwarding-957bcb14c95c
+
+    # https://stackoverflow.com/questions/24124140/ssh-agent-forwarding-with-ansible
+    # Debian /etc/sudoers.d/
+    # - name: enable SSH forwarding for sudo
+    #   lineinfile:
+    #     dest: /etc/sudoers
+    #     insertafter: '^#?\s*Defaults\s+env_keep\b'
+    #     line: 'Defaults    env_keep += "SSH_AUTH_SOCK"'
+
+    # looks like SSH certificates cannot be used with ssh agent
+    # in that case, just use regular NOPASSWD
+
+    - name: Keep SSH_AUTH_SOCK for ssh-agent passwordless sudo
+      copy:
+        dest: /etc/sudoers.d/keep_ssh_auth_sock
+        content: 'Defaults env_keep += "SSH_AUTH_SOCK"'
+        mode: 0440
+
+    # RHEL/CentOS and derivatives
+    # auth     sufficient    pam_ssh_agent_auth.so file=/etc/security/authorized_keys
+    - name: Allow pam auth passwordless sudo with ssh-agent
+      blockinfile:
+        dest: /etc/pam.d/sudo
+        insertbefore: '^@include common-auth'
+        block: |
+          auth sufficient pam_ssh_agent_auth.so file=%h/.ssh/authorized_keys
+
+    when: user_ssh_sudo_status.stdout != "success"
+
+  # - name: sudo without password for wheel group
+  #   copy:
+  #     content: '%wheel ALL=(ALL:ALL) NOPASSWD:ALL'
+  #     dest: /etc/sudoers.d/wheel_nopasswd
+  #     mode: 0440
+
+  - name: Disable password login for root user
+    block:
+
+    - name: Test if user can run sudo command the remote server
+      command: ssh -A -o StrictHostKeyChecking=no -o PasswordAuthentication=no -p {{ remote_port }} {{ user }}@{{ inventory_hostname }} "sudo echo success"
+      delegate_to: localhost
+      become: no
+
+    - name: Disable root login with password
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PermitRootLogin' # safe by default PermitRootLogin prohibit-password
+        state: absent
+        backup: yes
+      register: sshd_config
+
+    - name: Disable any login with password
+      blockinfile:
+        path: /etc/ssh/sshd_config.d/disable_password_login.conf
+        create: yes
+        # PasswordAuthentication yes by default
+        block: |
+          PasswordAuthentication no
+      register: sshd_config_d
+    
+    - name: Restart sshd service
+      service:
+        name: sshd
+        state: restarted
+      when: sshd_config.changed or sshd_config_d.changed
+
+    - name: Check if passwords is still allowed
+      shell:
+        cmd: "sshd -T | egrep -i 'passwordauth|permitroot' | grep yes"
+      register: passwords_allowed
+      failed_when: "'yes' in passwords_allowed.stdout"
+    
+

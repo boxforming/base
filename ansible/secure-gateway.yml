@@ -1,0 +1,547 @@
+---
+- name: Create gateway server
+  hosts: omnigateways
+  become: yes
+  gather_facts: false
+  vars:
+    - ansible_ssh_extra_args: "-o ForwardAgent=yes"
+    - tunnel_user: tunnel
+    - ansible_become_flags: "-H -S"
+    - ansible_python_interpreter: auto_silent
+    - reverse_hostname: "{{ inventory_hostname.split('.')[::-1] | join('.') }}"
+    - domain_hostname: "{{ inventory_hostname.split('.')[-2:] | join('.') }}" # co.uk and other should be sent by cli
+    - vpn_hostname: "vpn.{{ domain_hostname }}"
+    - ssh_key_filename: "~/.ssh/{{ reverse_hostname }}"
+    - ssh_pub_filename: "~/.ssh/{{ reverse_hostname }}.pub"
+    - haproxygw_service_file: /etc/systemd/system/haproxygw.service
+    - haproxygw_d_dir: /etc/haproxy/haproxygw.d
+    - nginx_listen_host: "127.0.0.2"
+    - ocserv_listen_host: "127.0.0.3"
+    - vpn_client_route: "0.0.0.0/0" #,::/0
+    - vpn_oc_client_subnet: 10.10.254.0/26
+    - vpn_wg_client_subnet: 10.10.254.64/26
+    - vpn_ikev2_client_subnet: 10.10.254.128/26 #,2a00:1450:400c:c05::/112
+    # TODO: use stubby
+    - client_dns: "8.8.8.8" #,2001:4860:4860::8888
+
+
+  # https://www.haproxy.com/blog/dynamic-configuration-haproxy-runtime-api/
+
+  tasks:
+
+  - name: Collect interface name
+    ansible.builtin.setup:
+      gather_subset:
+        - network
+    register: facts
+
+  # - debug: msg="{{ facts }}"
+
+  - name: SSH Tunnel
+    block: # when: tunnel_host is defined
+
+    - name: Create a tunnel user
+      user:
+        name: "{{ tunnel_user }}"
+        shell: "/bin/bash"
+        group: nogroup
+        state: present
+
+    # 2. add security properties to the sshd_config for tunnel user
+
+    - name: Restrict tunnel user from activity on server
+      blockinfile:
+        dest: "/etc/ssh/sshd_config.d/user_{{ tunnel_user }}"
+        create: yes
+        mode: 0640
+        block: |
+          Match User {{ tunnel_user }}
+            ForceCommand echo "no shell access is given"
+            AllowTcpForwarding remote
+            X11Forwarding no
+            PermitTunnel no
+        # validate is hardly possible here, it requires temporary file %s parameter
+        # validate: /usr/sbin/sshd -t -f /etc/ssh/sshd_config
+      register: sshd_config_tunnel
+
+    - name: Restart sshd service
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
+      when: sshd_config_tunnel.changed
+
+    # TODO: remove file "/etc/ssh/sshd_config.d/user_{{ tunnel_user }}" and restart service
+    # rescue:
+
+  - name: Software packages
+    block:
+
+    # when: user_ssh_sudo_status.stdout != "success"
+
+    - name: Install required packages
+      apt:
+        pkg:
+          # firewall
+          - ufw
+          # ssl and proxy
+          - haproxy
+          - nginx
+          # openconnect vpn
+          - ocserv
+          # ikev2 vpn
+          - strongswan
+          - strongswan-charon
+          - libstrongswan
+          - libstrongswan-standard-plugins
+          - libcharon-extra-plugins
+          # wireguard vpn
+          - wireguard
+        state: present
+
+  - name: SSL certificates
+    block:
+
+    - name: "Copy {{ domain_hostname }} cert"
+      copy: src={{ item.src }} dest={{ item.dest }} mode={{ item.mode }}
+      with_items:
+        - { src: "/Users/apla/.acme.sh/{{ domain_hostname }}/ca.cer", dest: "/etc/ssl/certs/{{ domain_hostname }}.ca", mode: "660"}
+        - { src: "/Users/apla/.acme.sh/{{ domain_hostname }}/ca.cer", dest: "/etc/ipsec.d/cacerts/ca.crt", mode: "660"}
+        - { src: "/Users/apla/.acme.sh/{{ domain_hostname }}/fullchain.cer", dest: "/etc/ssl/private/{{ domain_hostname }}", mode: "660"}
+        - { src: "/Users/apla/.acme.sh/{{ domain_hostname }}/fullchain.cer", dest: "/etc/ipsec.d/certs/{{ domain_hostname }}", mode: "660"}
+        - { src: "/Users/apla/.acme.sh/{{ domain_hostname }}/{{ domain_hostname }}.key", dest: "/etc/ssl/private/{{ domain_hostname }}.key", mode: "600"}
+        - { src: "/Users/apla/.acme.sh/{{ domain_hostname }}/{{ domain_hostname }}.key", dest: "/etc/ipsec.d/private/{{ domain_hostname }}", mode: "600"}
+
+  - name: HAProxy
+    block:
+
+    - name: Copy existing haproxy conf file
+      ansible.builtin.copy:
+        remote_src: yes
+        src: /etc/haproxy/haproxy.cfg
+        dest: /etc/haproxy/haproxygw.cfg
+        # backup: true
+        force: no
+
+    - name: Copy existing haproxy service file
+      ansible.builtin.copy:
+        remote_src: yes
+        src: /lib/systemd/system/haproxy.service
+        dest: "{{ haproxygw_service_file }}"
+        force: no
+      register: haproxy_service_copy
+
+    - name: Patch haproxy gateway service file 1/3
+      replace:
+        path: "{{ haproxygw_service_file }}"
+        regexp: '"CONFIG=[^\s]+\s"PIDFILE'
+        replace: '"CONFIG=/etc/haproxy/haproxygw.cfg" "CONFIGD={{ haproxygw_d_dir }}/proxy" "PIDFILE'
+      when: haproxy_service_copy.changed
+
+    - name: Patch haproxy gateway service file 2/3
+      replace:
+        path: "{{ haproxygw_service_file }}"
+        regexp: '\-f\s\$CONFIG\s\-([^f])'
+        replace: '-f $CONFIG -f $CONFIGD -\1'
+      when: haproxy_service_copy.changed
+
+    - name: Patch haproxy gateway service file 3/3
+      ansible.builtin.lineinfile:
+        path: "{{ haproxygw_service_file }}"
+        # regexp: '^Listen '
+        insertafter: '^Wants='
+        line: Conflicts=haproxy
+      when: haproxy_service_copy.changed
+
+    # /etc/systemd/system/sms2factor.service
+
+    # TODO: adjust
+    # https://www.haproxy.com/blog/the-four-essential-sections-of-an-haproxy-configuration/
+    # https://www.linuxhowto.net/run-ocserv-vpn-server-apache-nginx-on-the-same-box-with-haproxy/
+
+    - name: Creates haproxy.d directory
+      file:
+        path: "{{ haproxygw_d_dir }}"
+        state: directory
+
+    # maybe it is better to use templates, but I want to limit playbook to one file
+    # https://github.com/izhaohui/haproxy_443/blob/master/haproxy.cfg
+    - name: HAProxy frontend ssl and backends
+      blockinfile:
+        dest: "{{ haproxygw_d_dir }}/proxy"
+        create: yes
+        mode: 0644
+        block: |
+          frontend ssl
+            mode tcp
+            bind {{ facts.ansible_facts.ansible_default_ipv4.address }}:443 ssl crt {{ domain_hostname }}
+            tcp-request inspect-delay 5s
+            # tcp-request content capture req.ssl_sni len 25
+            # log-format "%ci:%cp [%t] %ft %b/%s %Tw/%Tc/%Tt %B %ts %ac/%fc/%bc/%sc/%rc %sq/%bq ssl_fc_has_sni:'%[ssl_fc_has_sni]' sni:%[capture.req.hdr(0)]/%[ssl_fc_sni]"
+            # https://gist.github.com/git001/73d1b7bcc3813ba40028c887e4f3e7f6
+            # log-format "%ci:%cp [%t] %ft %b/%s %Tw/%Tc/%Tt %B %ts %ac/%fc/%bc/%sc/%rc %sq/%bq ssl_fc_has_sni '%[ssl_fc_has_sni]' sni:'%[capture.req.hdr(0)]' ssl_fc_sni '%[ssl_fc_sni]' ssl_fc_protocol '%[ssl_fc_protocol]' ssl_bc '%[ssl_bc]' ssl_bc_alpn '%[ssl_bc_alpn]' ssl_bc_protocol '%[ssl_bc_protocol]' ssl_c_i_dn '%[ssl_c_i_dn()]' ssl_c_s_dn '%[ssl_c_s_dn()]' ssl_f_i_dn '%[ssl_f_i_dn()]' ssl_f_s_dn '%[ssl_f_s_dn]' ssl_fc_cipher '%[ssl_fc_cipher]' "
+            log-format "%ci:%cp [%t] %ft %b/%s %Tw/%Tc/%Tt %B %ts %ac/%fc/%bc/%sc/%rc %sq/%bq ssl_fc_has_sni:'%[ssl_fc_has_sni]' sni:%[ssl_fc_sni]"
+            tcp-request content accept if { req.ssl_hello_type 1 }
+            # acl www req.ssl_sni -i {{ inventory_hostname }}
+            # acl vpn req.ssl_sni -i vpn.{{ domain_hostname }}
+            acl www ssl_fc_sni -i {{ inventory_hostname }}
+            acl vpn ssl_fc_sni -i {{ vpn_hostname }}
+            acl ssh_payload payload(0,7) -m bin 5353482d322e30
+            # use_backend nginx if www { req.ssl_hello_type 1 }
+            # use_backend ocserv if vpn { req.ssl_hello_type 1 }
+            use_backend nginx if www
+            use_backend ocserv if vpn
+            use_backend openssh if ssh_payload
+            use_backend openssh if !{ req.ssl_hello_type 1 } { req.len 0 }
+
+          backend nginx
+            mode tcp
+          #   balance leastconn
+            option tcp-check 
+          # TODO: add ca= and remove verify none
+            server nginx 127.0.0.2:443 send-proxy-v2 check ca-file {{ domain_hostname }}.ca ssl verify none
+
+          # curl -v --resolve vpn.apla.me:443:95.85.89.60 https://vpn.apla.me/
+          backend ocserv
+            mode tcp
+            option ssl-hello-chk
+            timeout server 24h
+            server ocserv 127.0.0.3:443 send-proxy-v2 check ssl verify none
+
+          backend openssh
+            mode tcp
+            timeout server 3h
+            server openssh 127.0.0.1:22
+
+    # https://serverfault.com/questions/738045/haproxy-to-terminate-ssl-also-send-ssl-to-backend-server
+    # https://habr.com/ru/post/540212/
+
+    - name: HAProxy enable and launch service
+      ansible.builtin.service:
+        name: haproxygw
+        enabled: yes
+        state: started
+
+    - name: HAProxy ufw profile
+      ansible.builtin.blockinfile:
+        dest: "/etc/ufw/applications.d/haproxy-ssl"
+        create: yes
+        block: |
+          [HAProxy SSL]
+          title=HAProxy SSL proxy in TCP mode
+          description=HAProxy SSL proxy in TCP mode
+          ports=443/tcp
+
+    # - name: Patch haproxy gateway service file 3/4
+    #   ini_file:
+    #     path: /etc/systemd/system/multi-user.target.wants/haproxygw.service
+    #     section: Service
+    #     option: ExecStart
+    #     value: "/usr/sbin/haproxy -Ws -f $CONFIG -f $CONFIGD -p $PIDFILE $EXTRAOPTS"
+    #     no_extra_spaces: yes
+
+    # - name: Patch haproxy gateway service file 4/4
+    #   community.general.ini_file:
+    #     path: /etc/systemd/system/multi-user.target.wants/haproxygw.service
+    #     section: Service
+    #     option: ExecReload
+    #     values: 
+    #       - "/usr/sbin/haproxy -f $CONFIG -f $CONFIGD -c -q $EXTRAOPTS"
+    #       - "/bin/kill -USR2 $MAINPID"
+    #     no_extra_spaces: yes
+
+  - name: Nginx server
+    block:
+
+    # https://www.nginx.com/blog/using-nginx-as-dot-doh-gateway/
+    # https://github.com/tuxinvader/nginx-dns
+    # https://stackoverflow.com/questions/22948017/is-there-a-way-to-configure-nginx-to-broadcast-incoming-requests-to-multiple-ups
+    - name: Nginx DoT resolver
+      blockinfile:
+        # default Nginx config constains
+        # include /etc/nginx/conf.d/*.conf;
+        # within http section which is wrong
+        dest: "/etc/nginx/modules-enabled/90-dns-over-tcp.conf"
+        create: yes
+        mode: 0644
+        block: |
+          stream {
+            upstream dns {
+              zone dns 64k;
+              # TODO: replace with stubby
+              server {{ client_dns  }}:53;
+            }
+
+            upstream dot {
+              zone dot 64k;
+              server {{ client_dns }}:853;
+            }
+
+            server {
+              # listen 53; # DoT/DNS > DNS
+              listen 853 ssl; # DoT/DNS > DoT
+              ssl_certificate /etc/ssl/private/{{ domain_hostname }};
+              ssl_certificate_key /etc/ssl/private/{{ domain_hostname }}.key;
+              # proxy_ssl on;   # uncomment to use dot upstream
+              # proxy_pass dot; # uncomment to use dot upstream
+              proxy_pass dns; # comment out to use dot upstream
+            }
+          }
+    
+    - name: Nginx DNS-over-TCP ufw profile
+      ansible.builtin.blockinfile:
+        dest: "/etc/ufw/applications.d/nginx-DoT"
+        create: yes
+        block: |
+          [Nginx DoT]
+          title=Nginx DNS-over-TCP proxy
+          description=Nginx DNS-over-TCP proxy
+          ports=853/tcp
+    # - name: Create symbolic link
+    #   file:
+    #     src: "/etc/nginx/modules-available/dns-over-tcp"
+    #     dest: "/etc/nginx/modules-enabled/dns-over-tcp"
+    #     state: link
+    
+    - name: Nginx ssl listener
+      blockinfile:
+        dest: "/etc/nginx/sites-available/default"
+        insertafter: 'listen\s\[\:\:\]\:80\sdefault_server'
+        block: |
+          listen {{ nginx_listen_host }}:443 ssl proxy_protocol;
+
+          set_real_ip_from 127.0.0.1;
+          set_real_ip_from {{ facts.ansible_facts.ansible_default_ipv4.address }};
+          real_ip_header proxy_protocol;
+
+          server_name es-edgecenter.apla.me;
+
+          ssl_certificate /etc/ssl/private/{{ domain_hostname }};
+          ssl_certificate_key /etc/ssl/private/{{ domain_hostname }}.key;
+
+    - name: Nginx enable and launch service
+      ansible.builtin.service:
+        name: nginx
+        enabled: yes
+        state: restarted
+
+  
+  - name: OpenConnect VPN server
+    block:
+
+    - name: Patch ocserv config file 1/3
+      ansible.builtin.lineinfile:
+        path: /etc/ocserv/ocserv.conf
+        search_string: '^auth = "pam'
+        line: '#auth = "pam[gid-min=1000]"'
+
+    - name: Patch ocserv config file 2/3
+      ansible.builtin.lineinfile:
+        path: /etc/ocserv/ocserv.conf
+        search_string: '^udp-port = 443'
+        line: '#udp-port = 443'
+
+    # https://aeb-blog.ru/linux/ustanovka-openconnect-servera-v-sentos-7/
+    - name: Patch ocserv config file 3/3
+      ansible.builtin.blockinfile:
+        path: /etc/ocserv/ocserv.conf
+        # insertafter: '^server-key\s=\s\/etc\/ssl\/private\/ssl-cert-snakeoil.key'
+        block: |
+          auth = "plain[passwd=/etc/ocserv/passwd]"
+          listen-host = {{ ocserv_listen_host }}
+          listen-proxy-proto = true
+          server-cert = /etc/ssl/private/{{ domain_hostname }}
+          server-key = /etc/ssl/private/{{ domain_hostname }}.key
+          ca-cert = /etc/ssl/certs/{{ domain_hostname }}.ca
+          ipv4-network = {{ vpn_oc_client_subnet }}
+          default-domain = {{ domain_hostname }}
+          dns = {{ client_dns }}
+      # when: haproxy_service_copy.changed
+  
+  - name: IKEv2 VPN server
+    block:
+
+    # https://github.com/rnurgaliyev/ansible-vpn-ikev2
+    # https://github.com/jawj/IKEv2-setup/blob/master/setup.sh
+    # https://hub.zhovner.com/geek/universal-ikev2-server-configuration/
+
+    - name: swan config
+      ansible.builtin.blockinfile:
+        path: /etc/ipsec.conf
+        block: |
+          config setup
+              strictcrlpolicy=no
+              uniqueids = no
+
+          conn %default
+              # Most universal cypher list for all platforms
+              # Comment this line if connection fails
+              ike=aes256-sha256-modp1024,aes256-sha256-modp2048
+
+              # mobike=yes # default
+              dpdaction=clear
+              dpddelay=60s
+              dpdtimeout=1800s
+
+              fragmentation=yes
+
+              keyexchange=ikev2
+              auto=add
+              rekey=no
+              reauth=no
+              fragmentation=yes
+              #compress=yes
+
+              # server/gateway side
+              left=%any
+              leftsubnet={{ vpn_client_route }}
+              leftauth=pubkey
+              leftsendcert=always
+              # use domain from certificate's CN
+              leftid=@{{ domain_hostname }}
+              # leftcert=/etc/ssl/private/{{ domain_hostname }}
+              leftcert={{ domain_hostname }}
+
+              # client side
+              right=%any
+              rightsourceip={{ vpn_ikev2_client_subnet }}
+              rightauth=eap-mschapv2
+              rightid=%any
+              rightsendcert=never
+              rightdns={{ client_dns }}
+
+          # Windows and BlackBerry clients usually goes here
+          #conn ikev2-mschapv2
+          #    rightauth=eap-mschapv2
+
+          # Apple clients usually goes here
+          #conn ikev2-mschapv2-apple
+          #    rightauth=eap-mschapv2
+          #    # leftid={{ domain_hostname }}
+
+          conn ikev2-eap-ios
+              eap_identity=%any
+
+    - name: Strongswan IKEv2 ufw profile
+      ansible.builtin.blockinfile:
+        dest: "/etc/ufw/applications.d/strongswan-ikev2"
+        create: yes
+        block: |
+          [IKEv2 VPN]
+          title=Strongswan IKEv2 VPN
+          description=Strongswan IKEv2 VPN
+          ports=500,4500/udp
+
+
+  # https://jawher.me/wireguard-ansible-systemd-ubuntu/
+  - name: WireGuard VPN server
+    block:
+
+    # https://hackernoon.com/how-to-automate-your-vpn-setup-with-ansible-nl3133ri
+    # access to the network: https://www.comptia.org/blog/configuring-wireguard-vpn
+    # https://www.procustodibus.com/blog/2021/05/wireguard-ufw/
+    - name: generate private key
+      shell:
+        cmd: umask 077 && wg genkey | tee privatekey | wg pubkey > publickey
+        chdir: /etc/wireguard
+        creates: /etc/wireguard/publickey
+
+    - name: read private key
+      slurp:
+        src: "/etc/wireguard/privatekey"
+      register: vpn_wg_private_key
+
+    - name: wireguard config
+      ansible.builtin.blockinfile:
+        path: /etc/wireguard/wg0.conf
+        create: yes
+        block: |
+          [Interface]
+          # The address your computer will use on the VPN
+          Address = {{ vpn_wg_client_subnet }}
+          # Load your privatekey from file
+          PostUp = wg set %i private-key /etc/wireguard/privatekey
+          # Also ping the vpn server to ensure the tunnel is initialized
+          PostUp = ping -c1 10.0.0.1
+          # wg set %i peer i8nniZCkTISUfaLMQ+FV0Sewvq0f68UrkLkeV0a4BnA= allowed-ips 192.168.1.2/32,10.0.1.0/24 endpoint 12.35.181.48:1194
+
+
+          DNS = {{ client_dns }}
+
+          # send keep alive packet every 30s
+          PersistentKeepalive = 30
+
+          ListenPort = 51820
+          # PrivateKey = {{ vpn_wg_private_key.content }}
+
+    - name: WireGuard ufw profile
+      ansible.builtin.blockinfile:
+        dest: "/etc/ufw/applications.d/wireguard"
+        create: yes
+        block: |
+          [WireGuard]
+          title=WireGuard VPN
+          description=WireGuard VPN
+          ports=51820/udp
+
+  - name: VPN networking and firewall
+    block:
+
+    - name: Disable UFW logging
+      lineinfile:
+        path: /etc/ufw/ufw.conf
+        regexp: "^LOGLEVEL"
+        line: "LOGLEVEL=off"
+
+    - name: Change the default forward policy
+      lineinfile:
+        path: /etc/default/ufw
+        regexp: "^DEFAULT_FORWARD_POLICY"
+        line: 'DEFAULT_FORWARD_POLICY="ACCEPT"'
+
+    - name: Add masquerading
+      blockinfile:
+        path: /etc/ufw/before.rules
+        # insertbefore: "# don't delete the 'COMMIT'"
+        block: |
+          #
+
+          *nat
+          :POSTROUTING ACCEPT [0:0]
+          -A POSTROUTING -o {{ facts.ansible_facts.ansible_default_ipv4.interface }} -j MASQUERADE
+          
+          # don't delete the second 'COMMIT' line too
+          COMMIT
+
+          #
+
+    - name: Allow ufw applications
+      ufw:
+        rule: allow
+        name: '{{ item }}'
+      loop:
+        - "OpenSSH"
+        - "Nginx DoT"
+        - "HAProxy SSL"
+        - "IKEv2 VPN"
+        - "WireGuard"
+
+    # - name: Ensure UFW allows SSH
+    #   ufw:
+    #     to_port: "{{ ssh_port }}"
+    #     proto: "tcp"
+    #     rule: "allow"
+
+    # sudo /usr/sbin/ufw status verbose
+    # https://kellyjonbrazil.github.io/jc/docs/parsers/ufw
+    - name: Ensure UFW is enabled and denies by default
+      ufw:
+        state: "enabled"
+        policy: "deny"
+        direction: "incoming"
+
+    - name: Enable IP forwarding
+      sysctl:
+        name: "net.ipv4.ip_forward"
+        value: 1
+        state: present
+        sysctl_set: yes

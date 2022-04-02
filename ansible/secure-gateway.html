@@ -1,0 +1,198 @@
+<html>
+<head>
+<style type="text/css">
+/* css based on https://codepen.io/HaydenNG/pen/KKmbYMW */
+body {
+  font-family: sans-serif;
+}
+
+/* It's supposed to look like a tree diagram */
+.tree, .tree ul, .tree li {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+}
+
+.tree {
+    margin: 0 0 1em;
+    text-align: center;
+}
+.tree, .tree ul {
+    display: table;
+}
+.tree ul {
+  width: 100%;
+}
+    .tree li {
+        display: table-cell;
+        padding: .5em 0;
+        vertical-align: top;
+    }
+        /* _________ */
+        .tree li:before {
+            outline: solid 1px #ccc;
+            content: "";
+            left: 0;
+            position: absolute;
+            right: 0;
+            top: 0;
+        }
+        .tree li:first-child:before {left: 50%;}
+        .tree li:last-child:before {right: 50%;}
+
+        .tree code, .tree span {
+            border: solid .1em #333;
+            border-radius: .2em;
+            display: inline-block;
+            margin: 0 .2em .5em;
+            padding: .2em .5em;
+            position: relative;
+        }
+        /* If the tree represents DOM structure */
+        .tree code {
+            font-family: monaco, Consolas, 'Lucida Console', monospace;
+        }
+
+            /* | */
+            .tree ul:before,
+            .tree code:before,
+            .tree span:before {
+                outline: solid 1px #ccc;
+                content: "";
+                height: .4em;
+                left: 50%;
+                position: absolute;
+            }
+            .tree ul:before {
+                top: -.5em;
+            }
+            .tree code:before,
+            .tree span:before {
+                top: -.55em;
+            }
+
+/* The root node doesn't connect upwards */
+.tree > li {margin-top: 0;}
+    .tree > li:before,
+    .tree > li:after,
+    .tree > li > code:before,
+    .tree > li > span:before {
+      outline: none;
+    }
+
+/* colors */
+
+.tree span.orange, .tree code.orange {
+  --border-color: orange;
+  --bg-color: rgba(255,165,0,0.1);
+}
+
+.tree span.teal, .tree code.teal {
+  --border-color: rgb(0,124,128);
+  --bg-color: rgba(0,124,128,0.1);
+}
+
+.tree span.avocado, .tree code.avocado {
+  --border-color: rgb(86, 130, 3);
+  --bg-color: rgba(86, 130, 3, 0.1);
+}
+
+.tree span.cardinal, .tree code.cardinal {
+  --border-color: rgb(196, 30, 58);
+  --bg-color: rgba(196, 30, 58, 0.1);
+}
+
+.tree span.partial, .tree code.partial {
+  background: repeating-linear-gradient(
+    135deg,
+    #eee,
+    #eee 10px,
+    #bbb 10px,
+    #bbb 20px
+  );
+}
+
+.tree span, tree code {
+  border-color: var(--border-color);
+  background-color: var(--bg-color);
+}
+
+.tree span .header, .tree code .header {
+  border-bottom: solid 2px var(--border-color);
+  font-weight: bold;
+}
+
+.tree span .port, .tree code .port {
+  color: #999;
+}
+
+.tree span .app, .tree code .app {
+  color: var(--border-color);
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Dark theme styles go here */
+  body {
+    background-color: #333;
+    color: #eee;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  /* Light theme styles go here */
+}
+</style>
+</head>
+<body>
+<p>Service map</p>
+<ul class="tree">
+    <li><span>
+      <div>Gateway</div>
+      </span>
+      <ul>
+        <li><span class="teal">
+          <div class="header">SSL</div>
+          <div class="app">HAProxy</div>
+          <div class="port">443/tcp</div>
+          </span>
+          <ul>
+            <li><span>Nginx</span></li>
+            <li><span class="partial">OpenConnect</span></li>
+            <li><span>SSH</span></li>
+          </ul>
+        </li>
+        <li><span class="orange">
+          <div class="header">SSH</div>
+          <div class="app">OpenSSH</div>
+          <div class="port">22/tcp</div>
+          </span>
+          <ul>
+            <li><span>tunnel</span></li>
+          </ul>
+        </li>
+
+        <li>
+          <span class="avocado partial">
+          <div class="header">VPN</div>
+          <div class="app">Strongswan</div>
+          <div class="port">500,4500/tcp</div>
+          </span>
+        </li>
+        <li><span class="avocado">
+          <div class="header">VPN</div>
+          <div class="app">WireGuard</div>
+          <div class="port">51820/tcp</div>
+          </span>
+        </li>
+        <li><span class="cardinal">
+          <div class="header">DoT</div>
+          <div class="app">Nginx</div>
+          <div class="port">853/tcp</div>
+          </span>
+        </li>
+
+
+      </ul>
+    </li>
+  </ul>

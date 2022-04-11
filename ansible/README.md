@@ -39,23 +39,22 @@ ansible-playbook -i inventory.ini user.yml --extra-vars "new_user=username new_p
 ansible-playbook -i inventory.ini user.yml --extra-vars "new_user=username new_pass=''" --user root --ask-pass -l <host_alias>
 ```
 
-I don't recommend you to have private key path or root password in inventory,
-but I cannot deny you to shoot your own leg by providing such variables:
-
-# can conflict with generated private key file for that host
-
-`<host_alias> ansible_ssh_private_key_file=~/.ssh/<private_key_file>`
-
-# what can go wrong?
-
-`<host_alias> ansible_ssh_user=root ansible_ssh_pass=<root_password>`
-
-
-# additionally you can define different host and port
+Additionally you can define different host and port in your inventory
 
 `<host_alias> ansible_host=host ansible_port=2222`
 
 `ansible_host` and `ansible_port` is optional, useful if host != host_alias or testing using docker with ssh port 2222
+  
+I don't recommend you to have private key path or root password in inventory,
+but I cannot deny you to shoot your own leg by providing such variables:
+
+This setup can conflict with generated private key file for that host
+
+`<host_alias> ansible_ssh_private_key_file=~/.ssh/<private_key_file>`
+
+What can go wrong?
+
+`<host_alias> ansible_ssh_user=root ansible_ssh_pass=<root_password>`
 
 </details>
 

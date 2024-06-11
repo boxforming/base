@@ -1,5 +1,5 @@
 image:
-  - Visual Studio 2015
+  - Visual Studio 2017
   - Ubuntu
 
 environment:
@@ -16,7 +16,9 @@ build: off
 #  - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
 
 install:
+  # windows only because of APPVEYOR_YML_DISABLE_PS_LINUX https://www.appveyor.com/docs/getting-started-with-appveyor-for-linux/
   - ps: cinst pester
+  # linux only
   - sh: git clone https://github.com/bats-core/bats-core.git
   - sh: pushd bats-core
   - sh: export PATH=$PATH:$HOME/bin
@@ -24,6 +26,7 @@ install:
   - sh: popd
 
 test_script:
+  # windows only because of APPVEYOR_YML_DISABLE_PS_LINUX https://www.appveyor.com/docs/getting-started-with-appveyor-for-linux/
   - ps: |
       $testResultsFile = ".\TestsResults.xml"
       $res = Invoke-Pester -Path .\tests -OutputFormat NUnitXml -OutputFile $testResultsFile -PassThru
@@ -33,8 +36,9 @@ test_script:
           throw "$($res.FailedCount) tests failed."
       }
   # checks if code from documentation ok
-  - ps: iwr -useb https://raw.githubusercontent.com/boxforming/base/master/scripts/boxforming.psm1 | iex
+  - ps: iwr -useb https://raw.githubusercontent.com/boxforming/base/master/scripts/access-controller.psm1 | iex
   - ps: New-ClientAuthCert -Username test
+  # linux only
   - sh: bats tests
   # checks if code from documentation ok
   - sh: source <(cat scripts/boxforming.sh)

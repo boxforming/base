@@ -22,7 +22,7 @@ if ($myWindowsPrincipal.IsInRole($adminRole)) {
 # https://github.com/PowerShell/Win32-OpenSSH/releases
 
 
-New-Module -Name BoxForming  -ScriptBlock {
+New-Module -Name BoxFormingAccessNode -ScriptBlock {
 	param(
 	[parameter(Position=0,Mandatory=$false)]
 	[boolean] $BeQuiet = $false

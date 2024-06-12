@@ -1,6 +1,6 @@
  
  
- New-Module -Name BoxForming  -ScriptBlock {
+ New-Module -Name BoxFormingAccessController  -ScriptBlock {
 	
 	param(
 	[parameter(Position=0,Mandatory=$false)]

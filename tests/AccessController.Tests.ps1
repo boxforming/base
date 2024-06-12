@@ -7,7 +7,7 @@ Add-Type -AssemblyName System.Web
 $Script:Username = "forremote"
 $Script:Password = [System.Web.Security.Membership]::GeneratePassword(16,4) | ConvertTo-SecureString -AsPlainText -Force
 
-Describe "Import-Module BoxForming" {
+Describe "Import-Module BoxFormingAccessController" {
   Context "Certificates" {
     It "Should be able to generate certificate" {
       $Script:GeneratedCert = New-ClientAuthCert -Username $Script:Username
@@ -61,7 +61,7 @@ Describe "Import-Module BoxForming" {
 
       $Root = $PSScriptRoot
 
-      $InitScript = [scriptblock]::Create("Import-Module '$Root\..\scripts\boxforming.psm1' -ArgumentList True -Force")
+      $InitScript = [scriptblock]::Create("Import-Module '$Root\..\scripts\access-controller.psm1' -ArgumentList True -Force")
 
       $ServerJob = Start-Job -InitializationScript $InitScript -ScriptBlock {
         Start-CertShareServer -Port 50580 -Username $Input

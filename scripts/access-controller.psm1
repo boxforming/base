@@ -9,6 +9,33 @@
 	
 	$ErrorActionPreference = "Stop"
 	
+	Function Enable-WinRM {
+		Param(
+        	[parameter(ValueFromRemainingArguments = $true)]
+        	[string[]]$Passthrough
+		)
+	
+		Invoke-Expression (
+			"Function Configure-WinRMAnsible {`r`n" +
+				"$($AnsibleRes)`r`n" +
+				"Set-Item -Path WSMan:\localhost\Service\Auth\Certificate -Value `$true`r`n" +
+			"}"
+		)
+
+		Configure-WinRMAnsible @Passthrough
+	}
+
+	# Function Install-WinRM {
+
+	# 	$AnsibleWinRMScript = "https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1"
+
+	# 	. { iwr -useb $AnsibleWinRMScript } | iex
+
+	# 	Set-Item -Path WSMan:\localhost\Service\Auth\Certificate -Value $true
+	# }
+
+	# https://github.com/ansible/ansible/blob/devel/examples/scripts/ConfigureRemotingForAnsible.ps1
+
 	Function New-ClientAuthCert {
 		Param (
 		[string]$Username = $env:USERNAME,

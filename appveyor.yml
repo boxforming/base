@@ -17,7 +17,7 @@ build: off
 
 install:
   # windows only because of APPVEYOR_YML_DISABLE_PS_LINUX https://www.appveyor.com/docs/getting-started-with-appveyor-for-linux/
-  - ps: cinst pester
+  - ps: cinst pester --no-progress
   # linux only
   - sh: git clone https://github.com/bats-core/bats-core.git
   - sh: pushd bats-core

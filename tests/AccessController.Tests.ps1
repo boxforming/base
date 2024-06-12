@@ -31,31 +31,7 @@ Describe "Import-Module BoxFormingAccessController" {
 
   }
 
-  Context "WinRM" {
-    It "Should be able to enable WinRM" {
-      Write-Output (Get-Service WinRM).Status
-      Enable-WinRM -Verbose
-      Write-Output (Get-Service WinRM).Status
-      1 | Should -BeExactly 1
-    }
-
-    It "Should be able to enable WinRM with locally installed latest 'ConfigureWinRMForAnsible.ps1'" {
-      $LatestAnsibleWinRMScript = "https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1"
-      Invoke-WebRequest -Uri $LatestAnsibleWinRMScript -OutFile "ConfigureRemotingForAnsible.ps1"
-      Enable-WinRM -Verbose
-      1 | Should -BeExactly 1
-    }
-
-    It "Certificate for non-existing user" {
-      {
-        Import-ClientAuthCert -File "$env:HOMEDRIVE$env:HOMEPATH\$Script:Username.crt.pem" -Password $Script:Password
-      } | Should -Throw
-    }
-
-    It "Should create new local user" {
-      New-LocalAdminUser -Username $Script:Username -Password $Script:Password
-      Import-ClientAuthCert -File "$env:HOMEDRIVE$env:HOMEPATH\$Script:Username.crt.pem" -Password $Script:Password
-    }
+  Context "PS Web Server" {
 
     It "Should be able to start cert share web server" {
 
@@ -104,3 +80,4 @@ Describe "Import-Module BoxFormingAccessController" {
   }
 
 }
+

@@ -34,8 +34,8 @@ New-Module -Name BoxFormingAccessNode -ScriptBlock {
 	
 	$ErrorActionPreference = "Stop"
 	
-	$LatestAnsibleWinRMScript = "https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1"
-	$BinnedAnsibleWinRMScript = "https://raw.githubusercontent.com/ansible/ansible/24b46334817b408a4ad1c328d6b1641b6a9bec12/examples/scripts/ConfigureRemotingForAnsible.ps1";
+	$LatestAnsibleWinRMScript = "https://raw.githubusercontent.com/ansible/ansible-documentation/devel/examples/scripts/ConfigureRemotingForAnsible.ps1"
+	$BinnedAnsibleWinRMScript = "https://raw.githubusercontent.com/ansible/ansible-documentation/ae8772176a5c645655c91328e93196bcf741732d/examples/scripts/ConfigureRemotingForAnsible.ps1";
 	
 	# Write-Host "PSScriptRoot '$($PSScriptRoot)'"
 	

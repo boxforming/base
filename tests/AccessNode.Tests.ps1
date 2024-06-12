@@ -40,7 +40,8 @@ Describe "Import-Module BoxFormingAccessNode" {
     }
 
     It "Should be able to enable WinRM with locally installed latest 'ConfigureWinRMForAnsible.ps1'" {
-      $LatestAnsibleWinRMScript = "https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1"
+      # the same url as in acess-node.psm1
+      $LatestAnsibleWinRMScript = "https://raw.githubusercontent.com/ansible/ansible-documentation/devel/examples/scripts/ConfigureRemotingForAnsible.ps1"
       Invoke-WebRequest -Uri $LatestAnsibleWinRMScript -OutFile "ConfigureRemotingForAnsible.ps1"
       Enable-WinRM -Verbose
       1 | Should -BeExactly 1

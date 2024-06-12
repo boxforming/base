@@ -273,7 +273,7 @@ New-Module -Name BoxFormingAccessNode -ScriptBlock {
 		$FullName
 		)
 
-		New-RemoteUser(-Username $Username -Password $Password -Description $Description -FullName $FullName -IsAdmin $true)
+		New-RemoteUser -Username $Username -Password $Password -Description $Description -FullName $FullName -IsAdmin $true
 	}
 	
 	Function New-RemoteUser {

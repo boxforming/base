@@ -5,20 +5,24 @@ Import-Module $PSScriptRoot\..\scripts\access-controller.psm1 -Force
 Add-Type -AssemblyName System.Web
 
 BeforeAll {
-  $Username = "forremote"
-  $Password = [System.Web.Security.Membership]::GeneratePassword(16,4) | ConvertTo-SecureString -AsPlainText -Force
-  $GeneratedCert = New-ClientAuthCert -Username $Username
+  $Env:BoxUsername = "forremote"
+  $Env:BoxPassword = [System.Web.Security.Membership]::GeneratePassword(16,4) | ConvertTo-SecureString -AsPlainText -Force
+
+  $BoxUsername = $Env:BoxUsername
+  $BoxPAssword = $Env:BoxPassword
+
+  $GeneratedCert = New-ClientAuthCert -Username $BoxUsername -Password $BoxPassword
 }
 
 Describe "Import-Module BoxFormingAccessController" {
   Context "Certificates" {
 
     It "Should be able to import certificate" {
-      $CertPath = "$env:HOMEDRIVE$env:HOMEPATH\$Script:Username.crt.pem"
+      $CertPath = "$env:HOMEDRIVE$env:HOMEPATH\$BoxUsername.crt.pem"
       $CertFromFile = New-Object -TypeName System.Security.Cryptography.X509Certificates.X509Certificate2
       $CertFromFile.Import($CertPath)
 
-      $CertFromFile.Thumbprint | Should -BeExactly $Script:GeneratedCert.Thumbprint
+      $CertFromFile.Thumbprint | Should -BeExactly $GeneratedCert.Thumbprint
 
       # $Thumbprints = @(Get-ChildItem -Path cert:\LocalMachine\root | Where-Object { $_.Thumbprint -eq $CertFromFile.Thumbprint })
 
@@ -39,7 +43,7 @@ Describe "Import-Module BoxFormingAccessController" {
 
       $ServerJob = Start-Job -InitializationScript $InitScript -ScriptBlock {
         Start-CertShareServer -Port 50580 -Username $Input
-      } -InputObject $Script:Username
+      } -InputObject $BoxUsername
 
       Start-Sleep 1.0
 
@@ -63,7 +67,7 @@ Describe "Import-Module BoxFormingAccessController" {
       $CertWebContents = [System.Text.Encoding]::ASCII.GetString($CertWebBytes)
 
       # $bytes = [System.IO.File]::ReadAllBytes("path_to_the_file")
-      $CertFileContents = [System.IO.File]::ReadAllText("$env:HOMEDRIVE$env:HOMEPATH\$Script:Username.crt.pem")
+      $CertFileContents = [System.IO.File]::ReadAllText("$env:HOMEDRIVE$env:HOMEPATH\$BoxUsername.crt.pem")
 
       $CertWebContents | Should -Be $CertFileContents
 

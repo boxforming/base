@@ -3,7 +3,7 @@ Import-Module $PSScriptRoot\..\scripts\sysinfo.ps1 -Force
 Describe "Import-Module Sysinfo" {
   Context "Module Exports" {
     It "Should export at least one function" {
-      @(Get-Command -Module Sysinfo).Count | Should BeGreaterThan 0
+      @(Get-Command -Module Sysinfo).Count | Should -BeGreaterThan 0
     }
   }
 }

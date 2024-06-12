@@ -1,4 +1,4 @@
-Import-Module $PSScriptRoot\..\scripts\boxforming.psm1 -Force
+Import-Module $PSScriptRoot\..\scripts\access-controller.psm1 -Force
 
 # https://github.com/pester/Pester/wiki/Should
 

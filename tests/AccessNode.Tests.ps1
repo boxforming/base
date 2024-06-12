@@ -54,7 +54,7 @@ Describe "Import-Module BoxFormingAccessNode" {
     }
 
     It "Should create new local user" {
-      New-RemoteAdminUser -Username $Username -Password $Password
+      New-RemoteAdminUser -Username $BoxUsername -Password $BoxPassword
       Import-ClientAuthCert -File "$env:HOMEDRIVE$env:HOMEPATH\$BoxUsername.crt.pem" -Password $BoxPassword
     }
 

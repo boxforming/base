@@ -6,7 +6,7 @@ Add-Type -AssemblyName System.Web
 
 BeforeAll {
   $BoxUsername = $Env:BoxUsername
-  $BoxPAssword = $Env:BoxPassword
+  $BoxPassword = ConvertTo-SecureString $Env:BoxPassword -AsPlainText -Force 
 }
 
 Describe "Import-Module BoxFormingAccessNode" {

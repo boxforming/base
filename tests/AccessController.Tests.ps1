@@ -6,10 +6,10 @@ Add-Type -AssemblyName System.Web
 
 BeforeAll {
   $Env:BoxUsername = "forremote"
-  $Env:BoxPassword = [System.Web.Security.Membership]::GeneratePassword(16,4) | ConvertTo-SecureString -AsPlainText -Force
+  $Env:BoxPassword = [System.Web.Security.Membership]::GeneratePassword(16,4)
 
   $BoxUsername = $Env:BoxUsername
-  $BoxPAssword = $Env:BoxPassword
+  $BoxPassword = ConvertTo-SecureString $Env:BoxPassword -AsPlainText -Force
 
   $GeneratedCert = New-ClientAuthCert -Username $BoxUsername -Password $BoxPassword
 }

@@ -245,6 +245,28 @@ function Get-CertificateFromStore {
     return $Certificate
 }
 
+function New-CertificateUpdateTask {
+    param(
+        [string]$scriptPath = $PSCommandPath
+    )
+
+    $taskName = "Update WinRM host Certificate"
+    $taskDescription = "Weekly task to update the WinRM host certificate"
+    If (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+        Write-Verbose "Scheduled task '$taskName' already exists"
+        return
+    }
+    $action = New-ScheduledTaskAction -Execute "Powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$scriptPath`" `"$SubjectName`" $CertValidityDays `"$SkipNetworkProfileCheck`" `"$CreateSelfSignedCert`" `"$ForceNewSSLCert`" `"$GlobalHttpFirewallAccess`" `"$EnableBasicAuth`" `"$EnableCredSSP`""
+    $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Thursday -At "6:00AM"
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+
+    $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Description $taskDescription
+
+    Register-ScheduledTask -TaskName $taskName -InputObject $task -Force
+
+    Write-Verbose "Scheduled task '$taskName' created successfully."
+}
+
 # Setup error handling.
 Trap {
     $_
@@ -361,10 +383,10 @@ Else {
         $existingCert = Get-CertificateFromStore -Thumbprint $thumbprint
 
         If ($existingCert -and $existingCert.NotAfter -gt (Get-Date).AddDays(30)) {
-            Write-Verbose "Current WinRM certificate is still valid for more than 30 days. No action needed."
+            Write-Verbose "Current WinRM host certificate is still valid for more than 30 days. No action needed."
         }
         Else {
-            Write-Verbose "Forcing a new certificate because the current certificate is expired or missing. "
+            Write-Verbose "Forcing generation of a new host certificate because the current certificate is expired or missing. "
             $ForceNewSSLCert = $true
         }
     }
@@ -387,6 +409,8 @@ Else {
         New-WSManInstance -ResourceURI 'winrm/config/Listener' -SelectorSet $selectorsethttps -ValueSet $valueset
     }
 }
+
+New-CertificateUpdateTask
 
 # Check for basic authentication.
 $basicAuthSetting = Get-ChildItem WSMan:\localhost\Service\Auth | Where-Object { $_.Name -eq "Basic" }

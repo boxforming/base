@@ -77,7 +77,7 @@ Param (
     $CreateSelfSignedCert = $true,
     [switch]$ForceNewSSLCert,
     [switch]$GlobalHttpFirewallAccess,
-    [switch]$DisableBasicAuth = $false,
+    [switch]$EnableBasicAuth = $false,
     [switch]$EnableCredSSP
 )
 
@@ -391,7 +391,7 @@ Else {
 # Check for basic authentication.
 $basicAuthSetting = Get-ChildItem WSMan:\localhost\Service\Auth | Where-Object { $_.Name -eq "Basic" }
 
-If ($DisableBasicAuth) {
+If (!$EnableBasicAuth) {
     If (($basicAuthSetting.Value) -eq $true) {
         Write-Verbose "Disabling basic auth support."
         Set-Item -Path "WSMan:\localhost\Service\Auth\Basic" -Value $false

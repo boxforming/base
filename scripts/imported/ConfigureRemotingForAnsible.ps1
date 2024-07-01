@@ -225,6 +225,26 @@ Function Enable-GlobalHttpFirewallAccess {
     Write-Verbose "HTTP firewall rule $($rule.Name) updated"
 }
 
+function Get-CertificateFromStore {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Thumbprint,
+        [string]$StoreName = "My",
+        [string]$StoreLocation = "LocalMachine"
+    )
+    $Store = New-Object System.Security.Cryptography.X509Certificates.X509Store($StoreName, $StoreLocation)
+    $Store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
+    $Certificate = $Store.Certificates.Find([System.Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint, $Thumbprint, $false)[0]
+    $Store.Close()
+
+    if ($null -eq $Certificate) {
+        Write-Log "Certificate with thumbprint $Thumbprint not found in $StoreName store."
+        return $null
+    }
+
+    return $Certificate
+}
+
 # Setup error handling.
 Trap {
     $_
@@ -308,6 +328,12 @@ if ($token_value -ne 1) {
     New-ItemProperty -Path $token_path -Name $token_prop_name -Value 1 -PropertyType DWORD > $null
 }
 
+# SelectorSet for HTTPS
+$selectorsethttps = @{
+    Address = "*"
+    Transport = "HTTPS"
+}
+
 # Make sure there is a SSL listener.
 $listeners = Get-ChildItem WSMan:\localhost\Listener
 If (!($listeners | Where-Object { $_.Keys -like "TRANSPORT=HTTPS" })) {
@@ -321,17 +347,27 @@ If (!($listeners | Where-Object { $_.Keys -like "TRANSPORT=HTTPS" })) {
         CertificateThumbprint = $thumbprint
     }
 
-    $selectorset = @{
-        Transport = "HTTPS"
-        Address = "*"
-    }
-
     Write-Verbose "Enabling SSL listener."
-    New-WSManInstance -ResourceURI 'winrm/config/Listener' -SelectorSet $selectorset -ValueSet $valueset
+    New-WSManInstance -ResourceURI 'winrm/config/Listener' -SelectorSet $selectorsethttps -ValueSet $valueset
     Write-ProgressLog "Enabled SSL listener."
 }
 Else {
     Write-Verbose "SSL listener is already active."
+
+    $wsmaninstance = Get-WSManInstance -ResourceURI 'winrm/config/Listener' -SelectorSet $selectorsethttps
+
+    If ($wsmaninstance) {
+        $thumbprint = $wsmaninstance.CertificateThumbprint
+        $existingCert = Get-CertificateFromStore -Thumbprint $thumbprint
+
+        If ($existingCert -and $existingCert.NotAfter -gt (Get-Date).AddDays(30)) {
+            Write-Verbose "Current WinRM certificate is still valid for more than 30 days. No action needed."
+        }
+        Else {
+            Write-Verbose "Forcing a new certificate because the current certificate is expired or missing. "
+            $ForceNewSSLCert = $true
+        }
+    }
 
     # Force a new SSL cert on Listener if the $ForceNewSSLCert
     If ($ForceNewSSLCert) {
@@ -345,15 +381,10 @@ Else {
             Hostname = $SubjectName
         }
 
-        # Delete the listener for SSL
-        $selectorset = @{
-            Address = "*"
-            Transport = "HTTPS"
-        }
-        Remove-WSManInstance -ResourceURI 'winrm/config/Listener' -SelectorSet $selectorset
+        Remove-WSManInstance -ResourceURI 'winrm/config/Listener' -SelectorSet $selectorsethttps
 
         # Add new Listener with new SSL cert
-        New-WSManInstance -ResourceURI 'winrm/config/Listener' -SelectorSet $selectorset -ValueSet $valueset
+        New-WSManInstance -ResourceURI 'winrm/config/Listener' -SelectorSet $selectorsethttps -ValueSet $valueset
     }
 }
 
